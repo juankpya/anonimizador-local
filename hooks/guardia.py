@@ -84,7 +84,7 @@ def anonimizar(proyecto: str, fichero: str, cfg: dict) -> dict:
     except (IndexError, ValueError):
         cola = (proceso.stderr or proceso.stdout).strip().splitlines()[-3:]
         denegar("No se pudo anonimizar el fichero: " + " | ".join(cola))
-    if "error" in resultado:
+    if "error" in resultado and not resultado.get("sin_texto"):
         denegar("No se pudo anonimizar el fichero. " + resultado["error"])
     return resultado
 
@@ -100,26 +100,40 @@ def tratar_lectura(entrada: dict, proyecto: str, cwd: str, cfg: dict) -> None:
         sys.exit(0)
     if veredicto == config.BLOQUEAR:
         denegar(
-            "Este fichero no puede entrar en la conversacion: es una imagen o un "
-            "formato sin soporte dentro de una carpeta protegida, un fichero con "
+            "Este fichero no puede entrar en la conversacion: es un formato sin "
+            "soporte dentro de una carpeta protegida, un fichero con "
             "datos reales restaurados, o un fichero interno del plugin."
         )
     if veredicto == config.IMAGEN:
         if cfg.get("imagenes") == "bloquear":
             denegar("La configuracion bloquea la lectura de imagenes (no se pueden anonimizar).")
-        responder("ask", "[Anonimizador] Las imágenes no se pueden anonimizar "
-                         "(el OCR llegará en la versión 0.2). Si contiene datos "
-                         "personales, llegarán a Claude tal cual. ¿Leerla igualmente?")
+        responder("ask", "[Anonimizador] Claude va a ver esta imagen tal cual, sin "
+                         "anonimizar. Si contiene datos personales, le llegarán. "
+                         "¿Leerla igualmente?")
     if not os.path.isfile(ruta):
         sys.exit(0)  # que la herramienta de su propio error de fichero inexistente
 
     resultado = anonimizar(proyecto, ruta, cfg)
+    if resultado.get("sin_texto"):
+        es_imagen = os.path.splitext(ruta)[1].lower() in config.EXT_IMAGEN
+        if es_imagen and not config.en_protegida(ruta, proyecto, cfg):
+            responder("ask", "[Anonimizador] El OCR no ha encontrado texto en esta "
+                             "imagen, así que no hay nada que anonimizar; Claude la "
+                             "vería tal cual (por ejemplo, una foto). ¿Leerla igualmente?")
+        denegar("No contiene texto que se pueda extraer ni reconocer por OCR, y esta "
+                "protegido: no se puede leer. " + resultado["error"])
+
     nueva = dict(entrada)
     nueva["file_path"] = resultado["salida"]
     nueva.pop("pages", None)  # la copia es Markdown, no tiene paginas
+    forma = ""
+    if resultado.get("ocr"):
+        forma = (" (texto extraido por OCR: puede tener erratas o perder la "
+                 "maquetacion; no has recibido la imagen original)")
+    elif resultado.get("convertido"):
+        forma = " (convertido a Markdown)"
     aviso = (
-        f"Este fichero se ha anonimizado en local antes de llegarte"
-        f"{' (convertido a Markdown)' if resultado.get('convertido') else ''}: "
+        f"Este fichero se ha anonimizado en local antes de llegarte{forma}: "
         f"{resultado.get('entidades', 0)} dato(s) sustituidos por identificadores "
         f"como PERSONA_1 o NIF_1. Usalos tal cual, como valores opacos; el usuario "
         f"ve los datos reales en su pantalla."

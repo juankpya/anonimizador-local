@@ -42,9 +42,10 @@ def main() -> None:
         f"  Convierte el documento a Markdown, lo anonimiza en local e imprime "
         f"«COPIA ANONIMIZADA: <ruta>». Lee despues esa ruta con Read. Admite varias "
         f"rutas a la vez.",
-        f"- Documentos .pdf y cualquier fichero de las carpetas protegidas "
+        f"- Documentos .pdf, imagenes y cualquier fichero de las carpetas protegidas "
         f"({carpetas}): leelos directamente con Read usando su ruta original; el "
-        f"plugin te entrega automaticamente la copia anonimizada.",
+        f"plugin te entrega automaticamente la copia anonimizada. De las imagenes y "
+        f"los PDF escaneados recibes el texto reconocido por OCR, no la imagen.",
         "- No abras esos documentos de ninguna otra forma (cat, type, pandoc, "
         "scripts, skills de docx/pdf/xlsx...): se denegara o se pedira "
         "confirmacion al usuario, porque le llegarian a Anthropic sin anonimizar.",

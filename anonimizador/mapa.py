@@ -52,9 +52,27 @@ LONGITUD_MINIMA = 3
 _ALFANUM = "A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ"
 
 
+_SIN_TILDES = str.maketrans("áàäâéèëêíìïîóòöôúùüû", "aaaaeeeeiiiioooouuuu")
+_CON_TILDES = {"a": "[aáàäâ]", "e": "[eéèëê]", "i": "[iíìïî]",
+               "o": "[oóòöô]", "u": "[uúùüû]"}
+
+
 def clave(literal: str) -> str:
-    """Forma canonica: sin distinguir mayusculas ni cantidad de espacios."""
-    return " ".join(literal.split()).casefold()
+    """Forma canonica: sin distinguir mayusculas, tildes ni cantidad de
+    espacios. "María López", "MARIA LOPEZ" y "Maria  Lopez" son la misma
+    persona (un OCR o un formulario pierden las tildes con facilidad)."""
+    return " ".join(literal.split()).casefold().translate(_SIN_TILDES)
+
+
+def _patron_de(k: str) -> str:
+    """Expresion regular que encuentra la clave con o sin tildes."""
+    partes = []
+    for c in k:
+        if c == " ":
+            partes.append(r"[ \t]+")
+        else:
+            partes.append(_CON_TILDES.get(c) or re.escape(c))
+    return "".join(partes)
 
 
 class Mapa:
@@ -77,7 +95,10 @@ class Mapa:
         except (OSError, ValueError):
             return
         self.contadores = dict(datos.get("contadores", {}))
-        self.claves = dict(datos.get("claves", {}))
+        # Se recalculan las claves por si el mapa es de una version anterior.
+        self.claves = {}
+        for k, pseudo in datos.get("claves", {}).items():
+            self.claves.setdefault(clave(k), pseudo)
         self.reales = dict(datos.get("reales", {}))
         self.tipos = dict(datos.get("tipos", {}))
         self._patron_sustituir = self._patron_revelar = None
@@ -145,7 +166,7 @@ class Mapa:
         if self._patron_sustituir is None and self.claves:
             # Mas largo primero: "Juan Perez" antes que "Juan".
             ordenadas = sorted(self.claves, key=len, reverse=True)
-            partes = [re.escape(k).replace(r"\ ", r"[ \t]+") for k in ordenadas]
+            partes = [_patron_de(k) for k in ordenadas]
             # Limites de palabra: sin ellos "Ana" se comeria parte de "Anastasia".
             self._patron_sustituir = re.compile(
                 rf"(?<![{_ALFANUM}_])(?:" + "|".join(partes) + rf")(?![{_ALFANUM}_])",

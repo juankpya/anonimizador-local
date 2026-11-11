@@ -34,18 +34,24 @@ REALES = ["Maria Fernandez Lopez", "12345678Z", "maria.fernandez@example.com",
 
 
 class Base(unittest.TestCase):
+    CONFIG: dict = {}
+
     @classmethod
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp(prefix="anonimizador-pruebas-"))
         cls.home = cls.tmp / "home"
         cls.proyecto = cls.tmp / "proyecto"
         (cls.proyecto / "originales").mkdir(parents=True)
-        for nombre in ("contrato.docx", "contrato.pdf", "clientes.xlsx"):
+        for nombre in ("contrato.docx", "contrato.pdf", "clientes.xlsx",
+                       "contrato_foto.png", "contrato_escaneado.pdf", "sin_texto.png"):
             shutil.copy(RAIZ / "ejemplos" / nombre, cls.proyecto / nombre)
-        for nombre in ("contrato.txt", "ficha.json"):
+        for nombre in ("contrato.txt", "ficha.json", "sin_texto.png"):
             shutil.copy(RAIZ / "ejemplos" / nombre, cls.proyecto / "originales" / nombre)
         (cls.proyecto / "notas.md").write_text("# Notas\nNada sensible.\n", encoding="utf-8")
         (cls.proyecto / "foto.png").write_bytes(b"\x89PNG\r\n")
+        if cls.CONFIG:
+            (cls.proyecto / ".anonimizador.json").write_text(
+                json.dumps(cls.CONFIG), encoding="utf-8")
         cls.env = dict(os.environ, ANONIMIZADOR_HOME=str(cls.home),
                        CLAUDE_PROJECT_DIR=str(cls.proyecto), PYTHONUTF8="1")
         if ENTORNO:
@@ -74,6 +80,8 @@ class Base(unittest.TestCase):
 
 class A_Guardia(Base):
     """Decisiones que no necesitan el entorno pesado."""
+
+    CONFIG = {"imagenes": "preguntar"}
 
     def test_fichero_normal_pasa(self):
         self.assertEqual(self.guardia("Read", file_path=self.ruta("notas.md")), {})
@@ -211,6 +219,37 @@ class B_Lectura(Base):
                        "Version 4111 1111 1111 1112 del producto",  # no pasa Luhn
                        "Vive en Cordoba"):                          # lugar suelto
             self.assertEqual(self.hook("prompt.py", {"prompt": prompt}), {}, prompt)
+
+    def test_92_ocr_de_imagen(self):
+        salida, texto = self.leer("contrato_foto.png")
+        self.assertTrue(salida["updatedInput"]["file_path"].endswith(".md"))
+        self.assertIn("OCR", salida["additionalContext"])
+        self.assertIn("PERSONA_", texto)
+        self.assertIn("NIF_", texto)
+        self.assertIn("IBAN_", texto)
+        self.assertIn("Contrato de arrendamiento", texto)  # el texto normal se conserva
+        for real in ("María Fernández López", "12345678Z", "maria.fernandez@example.com",
+                     "ES91 2100 0418 4502 0005 1332", "612 345 678", "Pedro Ruiz Gómez"):
+            self.assertNotIn(real, texto)
+
+        # Con y sin tildes es la misma persona: mismo identificador que en el .docx.
+        _, docx = self.leer("contrato.docx")
+        persona = texto.split("Arrendataria: ")[1].split(",")[0]
+        self.assertTrue(persona.startswith("PERSONA_"), persona)
+        self.assertIn(persona, docx)
+
+    def test_93_ocr_de_pdf_escaneado(self):
+        salida, texto = self.leer("contrato_escaneado.pdf")
+        self.assertIn("OCR", salida["additionalContext"])
+        self.assertIn("## Página 1", texto)
+        self.assertIn("PERSONA_", texto)
+        self.comprobar_sin_fugas(texto)
+
+    def test_94_imagen_sin_texto(self):
+        fuera = self.guardia("Read", file_path=self.ruta("sin_texto.png"))
+        self.assertEqual(fuera.get("permissionDecision"), "ask")
+        dentro = self.guardia("Read", file_path=self.ruta("originales", "sin_texto.png"))
+        self.assertEqual(dentro.get("permissionDecision"), "deny")
 
     def test_91_preparar_autorizado_y_sin_fugas(self):
         guion = str(RAIZ / "anonimizar.py").replace("\\", "/")

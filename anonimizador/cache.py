@@ -18,7 +18,7 @@ from . import __version__, config
 
 def ruta_copia(proyecto: str | os.PathLike, fichero: str | os.PathLike, cfg: dict) -> Path:
     sufijo = Path(fichero).suffix.lower()
-    extension = ".md" if sufijo in cfg["extensiones_documento"] else sufijo
+    extension = ".md" if config.se_convierte(fichero, cfg) else sufijo
     huella = hashlib.sha256(config.normalizar(fichero).encode("utf-8")).hexdigest()[:20]
     return config.dir_cache(proyecto) / f"{huella}{extension}"
 
@@ -51,9 +51,10 @@ def vigente(proyecto: str | os.PathLike, fichero: str | os.PathLike, cfg: dict) 
 
 
 def anotar(proyecto: str | os.PathLike, fichero: str | os.PathLike, cfg: dict,
-           entidades: int, convertido: bool) -> dict:
+           entidades: int, convertido: bool, ocr: bool = False) -> dict:
     copia = ruta_copia(proyecto, fichero, cfg)
-    datos = {"firma": _firma(fichero, cfg), "entidades": entidades, "convertido": convertido}
+    datos = {"firma": _firma(fichero, cfg), "entidades": entidades,
+             "convertido": convertido, "ocr": ocr}
     copia.with_name(copia.name + ".meta.json").write_text(
         json.dumps(datos, ensure_ascii=False), encoding="utf-8")
     datos["salida"] = str(copia)

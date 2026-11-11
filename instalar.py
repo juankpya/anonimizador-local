@@ -80,18 +80,18 @@ def main() -> int:
                   "Instala Python 3.12 desde https://www.python.org/downloads/ "
                   "y vuelve a ejecutar este instalador.", file=sys.stderr)
             return 2
-        print(f"[1/3] Creando el entorno en {destino}")
+        print(f"[1/4] Creando el entorno en {destino}")
         destino.parent.mkdir(parents=True, exist_ok=True)
         ejecutar(base + ["-m", "venv", str(destino)])
     else:
-        print(f"[1/3] El entorno ya existe en {destino}")
+        print(f"[1/4] El entorno ya existe en {destino}")
 
-    print("[2/3] Instalando dependencias (Presidio, spaCy, MarkItDown)")
+    print("[2/4] Instalando dependencias (Presidio, spaCy, MarkItDown, RapidOCR)")
     ejecutar([str(interprete), "-m", "pip", "install", "--quiet", "--upgrade", "pip"])
     ejecutar([str(interprete), "-m", "pip", "install", "--quiet",
               "-r", str(RAIZ / "requirements.txt")])
 
-    print(f"[3/3] Descargando el modelo de lenguaje {modelo}")
+    print(f"[3/4] Descargando el modelo de lenguaje {modelo}")
     comprobacion = subprocess.run(
         [str(interprete), "-c", f"import spacy; spacy.load('{modelo}')"],
         capture_output=True)
@@ -99,6 +99,15 @@ def main() -> int:
         ejecutar([str(interprete), "-m", "spacy", "download", modelo])
     else:
         print("  ya estaba instalado")
+
+    # RapidOCR puede descargar sus modelos en el primer uso: se fuerza ahora
+    # para que despues no haga falta la red.
+    print("[4/4] Preparando los modelos de OCR")
+    ejecutar([str(interprete), "-c",
+              "from PIL import Image, ImageDraw; from rapidocr import RapidOCR; "
+              "i = Image.new('RGB', (320, 80), 'white'); "
+              "ImageDraw.Draw(i).text((10, 30), 'prueba 123', fill='black'); "
+              "RapidOCR(params={'Global.log_level': 'error'})(i); print('  listos')"])
 
     print("\nInstalacion completada. A partir de ahora todo funciona sin conexion.")
     return 0

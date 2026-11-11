@@ -10,7 +10,7 @@ recibe esa copia. Cuando responde, el plugin **vuelve a poner los datos reales
 en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha visto
 `PERSONA_1`.
 
-> **Estado: versión 0.1, alfa.** La detección es probabilística: reduce mucho
+> **Estado: versión 0.2, alfa.** La detección es probabilística: reduce mucho
 > la exposición de datos personales, pero **no garantiza** que no se escape
 > ninguno. Lee el apartado [Límites](#límites) antes de usarlo con datos reales.
 
@@ -24,7 +24,8 @@ en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha vi
 | Escribes un NIF, IBAN, tarjeta, correo, teléfono o un nombre ya conocido en el mensaje | El mensaje se detiene y **tú decides**: modificarlo o reenviarlo tal cual |
 | Citas un documento con `@` | Igual: se detiene y tú decides |
 | Adjuntas una imagen al mensaje | **No siempre se detecta**: ver [Límites](#límites) |
-| Claude intenta leer una imagen | Se te pregunta antes (las imágenes aún no se pueden anonimizar) |
+| Claude lee una imagen (`.png` `.jpg` `.webp` `.bmp` `.tif`) o un PDF escaneado | Se extrae el texto por OCR en local, se anonimiza y Claude recibe ese texto, **no la imagen** |
+| La imagen no tiene texto (una foto, un logotipo) | Se te pregunta antes de que Claude la vea |
 | Claude intenta abrir un original por otro camino (`cat`, `grep`, editar…) | Se deniega o se te pide confirmación |
 
 Todo el proceso es local. La única vez que el plugin usa la red es durante la
@@ -45,7 +46,7 @@ Dentro de Claude Code:
 ```
 
 El último paso crea un entorno en `~/.anonimizador/venv` y descarga alrededor
-de 1 GB (Presidio, spaCy con el modelo de español y MarkItDown). Solo se hace
+de 1 GB (Presidio, spaCy con el modelo de español, MarkItDown y RapidOCR). Solo se hace
 una vez.
 
 ## Uso
@@ -94,7 +95,7 @@ Opcional. Crea `.anonimizador.json` en la raíz del proyecto (o
 {
   "carpetas_protegidas": ["originales", "clientes"],
   "documentos_en_todas_partes": true,
-  "imagenes": "preguntar",
+  "imagenes": "ocr",
   "avisar_prompt": true,
   "revelar_en_pantalla": true,
   "permitidos": ["Acme S.L.", "soporte@miempresa.com"],
@@ -108,7 +109,7 @@ Opcional. Crea `.anonimizador.json` en la raíz del proyecto (o
 |---|---|
 | `carpetas_protegidas` | Carpetas donde se anonimiza todo, también el texto plano |
 | `documentos_en_todas_partes` | Si es `false`, Word/PDF/Excel solo se anonimizan en carpetas protegidas |
-| `imagenes` | `preguntar`, `permitir` o `bloquear` |
+| `imagenes` | Fuera de carpetas protegidas: `ocr` (por defecto: Claude recibe el texto anonimizado), `preguntar`, `permitir` (Claude ve la imagen original; útil si trabajas con capturas de interfaz) o `bloquear`. Dentro de una carpeta protegida siempre es `ocr` |
 | `avisar_prompt` | Detener los mensajes con datos sensibles o adjuntos |
 | `revelar_en_pantalla` | Mostrar los datos reales en las respuestas |
 | `permitidos` | Textos que nunca deben anonimizarse ni provocar avisos |
@@ -165,8 +166,15 @@ Léelos: un plugin de Claude Code no puede cerrar todas las vías.
   capturas ni fotos de documentos con datos personales.**
 - **Los nombres de fichero no se anonimizan.** Si un fichero se llama
   `Contrato Juan Pérez.docx`, Claude ve ese nombre.
-- **Imágenes y PDF escaneados**: sin OCR todavía. Las imágenes se bloquean o se
-  consultan; un PDF sin texto se deniega.
+- **El OCR comete erratas, y una errata es una fuga posible.** Si lee
+  `1234567BZ` donde ponía `12345678Z`, el detector ya no lo reconoce como NIF y
+  pasa sin anonimizar. Ocurre sobre todo con fotos torcidas, borrosas, de baja
+  resolución o manuscritas. El OCR tampoco conserva tablas ni maquetación, y
+  Claude no ve gráficos, firmas ni sellos. Las imágenes incrustadas dentro de
+  un Word o de un PDF con texto no se leen.
+- **Con `imagenes: "ocr"` Claude nunca ve la imagen**, solo su texto. Si
+  necesitas que vea capturas de pantalla o diseños, usa `permitir` o
+  `preguntar` en ese proyecto.
 - **Órdenes de terminal**: la guardia sobre Bash/PowerShell es de mejor esfuerzo.
   Una orden rebuscada puede leer un original sin que el plugin lo note.
 - **Word con control de cambios, comentarios o cuadros de texto**: puede que la
@@ -201,7 +209,11 @@ milisegundos; la conversión y la detección corren en un proceso aparte dentro
 del entorno virtual. Detección:
 [Microsoft Presidio](https://github.com/microsoft/presidio) con
 [spaCy](https://spacy.io). Conversión:
-[MarkItDown](https://github.com/microsoft/markitdown).
+[MarkItDown](https://github.com/microsoft/markitdown). OCR:
+[RapidOCR](https://github.com/RapidAI/RapidOCR) sobre ONNX Runtime, en CPU
+(unos 3-5 segundos por página), con
+[pypdfium2](https://github.com/pypdfium2-team/pypdfium2) para convertir en
+imagen las páginas escaneadas de un PDF.
 
 ## Pruebas
 
@@ -214,7 +226,6 @@ Ejecuta cada hook como lo hace Claude Code, con los documentos de `ejemplos/`
 
 ## Hoja de ruta
 
-- **0.2** — OCR local para imágenes y PDF escaneados.
 - **0.3** — Servidor MCP para usarlo desde Claude Desktop.
 - Anonimizar nombres de fichero, cifrar el mapa, revelar ficheros `.docx`.
 

@@ -24,6 +24,8 @@ from pathlib import Path
 NOMBRE_CONFIG_PROYECTO = ".anonimizador.json"
 
 EXT_IMAGEN = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".heic"}
+# Imagenes que el OCR sabe abrir (debe coincidir con conversion.EXT_OCR).
+EXT_OCR = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
 
 POR_DEFECTO = {
     # Carpetas (relativas a la raiz del proyecto, o absolutas) cuyo contenido
@@ -36,10 +38,13 @@ POR_DEFECTO = {
     # Texto plano: solo se anonimiza dentro de las carpetas protegidas.
     "extensiones_texto": [".txt", ".md", ".json", ".xml", ".csv", ".log",
                           ".yaml", ".yml", ".eml", ".html", ".htm"],
-    # Imagenes fuera de carpetas protegidas: "preguntar" | "permitir" | "bloquear".
-    # Dentro de una carpeta protegida siempre se bloquean (sin OCR no hay forma
-    # de anonimizarlas).
-    "imagenes": "preguntar",
+    # Imagenes fuera de carpetas protegidas:
+    #   "ocr"       se extrae el texto por OCR y se anonimiza (Claude no ve la imagen)
+    #   "preguntar" se te pregunta antes de que Claude vea la imagen original
+    #   "permitir"  Claude ve la imagen original (util si trabajas con capturas de UI)
+    #   "bloquear"  no se pueden leer
+    # Dentro de una carpeta protegida siempre se aplica "ocr".
+    "imagenes": "ocr",
     # Aviso antes de enviar un prompt con datos sensibles o adjuntos.
     "avisar_prompt": True,
     "minutos_confirmacion": 10,
@@ -152,12 +157,24 @@ def clasificar(ruta: str | os.PathLike, proyecto: str | os.PathLike, cfg: dict) 
             return ANONIMIZAR
         return LIBRE
     if sufijo in EXT_IMAGEN:
+        con_ocr = sufijo in EXT_OCR
         if protegida:
-            return BLOQUEAR
-        return LIBRE if cfg.get("imagenes") == "permitir" else IMAGEN
+            return ANONIMIZAR if con_ocr else BLOQUEAR
+        modo = cfg.get("imagenes", "ocr")
+        if modo == "permitir":
+            return LIBRE
+        if modo == "ocr" and con_ocr:
+            return ANONIMIZAR
+        return IMAGEN  # preguntar, bloquear, o formato que el OCR no abre
     if protegida:
         return ANONIMIZAR if sufijo in cfg["extensiones_texto"] else BLOQUEAR
     return LIBRE
+
+
+def se_convierte(ruta: str | os.PathLike, cfg: dict) -> bool:
+    """True si el fichero se pasa a Markdown (documentos e imagenes)."""
+    sufijo = os.path.splitext(str(ruta))[1].lower()
+    return sufijo in cfg["extensiones_documento"] or sufijo in EXT_OCR
 
 
 def python_del_entorno() -> Path | None:

@@ -7,8 +7,9 @@
     python anonimizar.py --revelar respuesta.md   restaura los datos reales
     python anonimizar.py --estado                 resumen del proyecto actual
 
-Word, PDF y Excel se convierten a Markdown antes de anonimizar; los ficheros
-de texto (.txt .md .json .xml .csv ...) se anonimizan tal cual.
+Word, PDF y Excel se convierten a Markdown antes de anonimizar; de las
+imagenes y los PDF escaneados se extrae el texto por OCR; los ficheros de
+texto (.txt .md .json .xml .csv ...) se anonimizan tal cual.
 
 La salida va a ./anonimizados (o --salida). El mapa de reidentificacion se
 guarda en ~/.anonimizador, nunca junto a la salida. El "proyecto" es la
@@ -135,7 +136,8 @@ def anonimizar(proyecto: str, entrada: Path, salida: Path) -> int:
     from anonimizador import tuberia
 
     cfg = config.cargar(proyecto)
-    admitidas = set(cfg["extensiones_documento"]) | set(cfg["extensiones_texto"])
+    admitidas = (set(cfg["extensiones_documento"]) | set(cfg["extensiones_texto"])
+                 | config.EXT_OCR)
     ficheros = sorted(f for f in entrada.iterdir() if f.is_file()) if entrada.is_dir() else [entrada]
     if not ficheros:
         print("No hay ficheros que procesar.")
@@ -150,7 +152,7 @@ def anonimizar(proyecto: str, entrada: Path, salida: Path) -> int:
             continue
         # "contrato.docx" -> "contrato.docx.md": conservar la extension de origen
         # evita que contrato.docx y contrato.pdf se pisen entre si.
-        extension = sufijo + ".md" if sufijo in cfg["extensiones_documento"] else sufijo
+        extension = sufijo + ".md" if config.se_convierte(fichero, cfg) else sufijo
         try:
             # Primero a un nombre provisional: el nombre definitivo tambien se
             # anonimiza, y para eso hay que haber detectado antes las entidades.

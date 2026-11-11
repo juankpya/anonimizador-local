@@ -48,8 +48,11 @@ def procesar(proyecto: str, fichero: str, cfg: dict | None = None,
         if previo:
             return previo
 
-    convertido = origen.suffix.lower() in cfg["extensiones_documento"]
-    texto = conversion.a_markdown(origen) if convertido else conversion.leer_texto(origen)
+    convertido, ocr = config.se_convierte(origen, cfg), False
+    if convertido:
+        texto, ocr = conversion.a_markdown(origen)
+    else:
+        texto = conversion.leer_texto(origen)
 
     mapa = Mapa(proyecto)
     with mapa.bloqueo():
@@ -75,8 +78,8 @@ def procesar(proyecto: str, fichero: str, cfg: dict | None = None,
 
     unicas = len({d["pseudonimo"] for d in detector.detecciones})
     if destino is None:
-        return cache.anotar(proyecto, origen, cfg, unicas, convertido)
-    return {"salida": str(salida), "entidades": unicas, "convertido": convertido}
+        return cache.anotar(proyecto, origen, cfg, unicas, convertido, ocr)
+    return {"salida": str(salida), "entidades": unicas, "convertido": convertido, "ocr": ocr}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,7 +95,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             print(json.dumps(procesar(args.proyecto, fichero, cfg), ensure_ascii=False))
         except Exception as exc:  # noqa: BLE001 - el error viaja al hook como dato
-            print(json.dumps({"error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False))
+            print(json.dumps({"error": f"{type(exc).__name__}: {exc}",
+                              "sin_texto": isinstance(exc, conversion.SinTexto)},
+                             ensure_ascii=False))
             estado = 1
         sys.stdout.flush()
     return estado
