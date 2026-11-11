@@ -1,0 +1,9 @@
+{
+  "cliente": "Maria Fernandez Lopez",
+  "nif": "12345678Z",
+  "correo": "maria.fernandez@example.com",
+  "telefono": "+34 612 345 678",
+  "iban": "ES9121000418450200051332",
+  "ciudad": "Cordoba",
+  "notas": "Contactar a Maria Fernandez Lopez antes del vencimiento."
+}

@@ -1,0 +1,14 @@
+{
+  "name": "anonimizador-local",
+  "description": "Anonimización local de documentos para Claude Code",
+  "owner": {
+    "name": "juankpya"
+  },
+  "plugins": [
+    {
+      "name": "anonimizador",
+      "source": "./",
+      "description": "Anonimiza en local los documentos que lee Claude y revela los datos reales solo en tu pantalla."
+    }
+  ]
+}

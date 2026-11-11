@@ -1,0 +1,8 @@
+Contrato de arrendamiento
+
+Arrendataria: Maria Fernandez Lopez, con NIF 12345678Z, domiciliada en Cordoba.
+Correo de contacto: maria.fernandez@example.com y telefono +34 612 345 678.
+El pago se domiciliara en la cuenta ES9121000418450200051332.
+Tarjeta de respaldo: 4111 1111 1111 1111.
+
+El arrendador, Pedro Ruiz Gomez, acepta las condiciones. Cualquier notificacion a Maria Fernandez Lopez sera por escrito.

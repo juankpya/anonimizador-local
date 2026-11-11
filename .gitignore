@@ -1,0 +1,23 @@
+# --- Datos: NUNCA deben subirse -------------------------------------------
+# Documentos reales, sus copias y los mapas de reidentificacion.
+originales/
+anonimizados/
+mapas/
+privado/
+confidencial/
+*.revelado.*
+.anonimizador.json
+
+# --- Material interno previo a la version publica -------------------------
+legado/
+Informe_anonimizacion_local.md
+Prompt_anonimizacion_documentos.md
+ejemplos/generar_pruebas.py
+
+# --- Entorno y herramientas ------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.pyc
+.claude/
+hooks/diagnostico.log
