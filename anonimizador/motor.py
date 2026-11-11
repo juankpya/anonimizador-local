@@ -66,7 +66,15 @@ class Detector:
                 if (r.entity_type in _TIPOS_NER and len(literal.split()) == 1
                         and linea[r.end:].lstrip(" *_").startswith(":")):
                     continue
-                self._registrar(literal, r.entity_type, r.score, procedencia)
+                # En una tabla Markdown el reconocedor puede abarcar dos celdas
+                # ("Titular | Maria Lopez"): cada celda es un dato distinto.
+                # La primera, si es una sola palabra, suele ser la etiqueta.
+                celdas = literal.split("|")
+                for i, celda in enumerate(celdas):
+                    if (len(celdas) > 1 and i == 0 and r.entity_type in _TIPOS_NER
+                            and len(celda.split()) == 1):
+                        continue
+                    self._registrar(celda, r.entity_type, r.score, procedencia)
             for patron in self.terminos:
                 for m in patron.finditer(linea):
                     self._registrar(m.group(0), "TERMINO_PROPIO", 1.0, procedencia)

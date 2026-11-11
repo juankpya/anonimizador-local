@@ -1,7 +1,8 @@
 # Anonimizador local
 
-Plugin de [Claude Code](https://code.claude.com) para trabajar con documentos
-de clientes sin enviar sus datos personales.
+Plugin de [Claude Code](https://code.claude.com), y servidor MCP para Claude
+Desktop, para trabajar con documentos de clientes sin enviar sus datos
+personales.
 
 Cuando Claude va a leer un documento, el plugin lo **convierte a Markdown y lo
 anonimiza en tu equipo**: los nombres, NIF, correos, teléfonos, IBAN… se
@@ -10,7 +11,7 @@ recibe esa copia. Cuando responde, el plugin **vuelve a poner los datos reales
 en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha visto
 `PERSONA_1`.
 
-> **Estado: versión 0.2, alfa.** La detección es probabilística: reduce mucho
+> **Estado: versión 0.3, alfa.** La detección es probabilística: reduce mucho
 > la exposición de datos personales, pero **no garantiza** que no se escape
 > ninguno. Lee el apartado [Límites](#límites) antes de usarlo con datos reales.
 
@@ -129,7 +130,53 @@ python anonimizar.py contrato.docx          # -> anonimizados/contrato.docx.md
 python anonimizar.py carpeta_de_documentos
 python anonimizar.py --revelar respuesta.md # -> respuesta.revelado.md
 python anonimizar.py --estado
+python servidor_mcp.py --carpeta DIR         # servidor MCP (lo lanza el cliente)
 ```
+
+## Claude Desktop (servidor MCP)
+
+La app de escritorio no tiene hooks, así que allí el plugin no puede
+interceptar lecturas ni cambiar lo que se muestra. En su lugar hay un servidor
+MCP con herramientas que Claude usa para leer los documentos ya anonimizados.
+
+1. Clona este repositorio en una carpeta fija y ejecuta `python instalar.py`.
+2. Genera la configuración indicando la carpeta (o carpetas) de documentos:
+
+   ```
+   python anonimizar.py --config-escritorio "C:\Clientes"
+   ```
+
+3. Copia el bloque que imprime en `claude_desktop_config.json` (Ajustes →
+   Desarrollador → Editar configuración) y reinicia Claude Desktop.
+
+Después pide los documentos por su nombre o ruta: «lee contrato.docx y
+resúmelo».
+
+| Herramienta | Qué hace |
+|---|---|
+| `leer_documento` | Convierte (o pasa por OCR), anonimiza y devuelve el texto con identificadores |
+| `listar_carpeta` | Lista ficheros; los datos ya conocidos salen como identificadores también en los nombres |
+| `guardar_revelado` | Guarda un texto escrito por Claude **con los datos reales** en `<nombre>.revelado.md`; Claude solo recibe un recuento |
+| `revelar_fichero` | Lo mismo para un fichero de texto que ya existe |
+| `estado` | Carpetas accesibles e identificadores registrados |
+
+Diferencias con el plugin de Claude Code, que conviene tener claras:
+
+- **Las respuestas del chat muestran identificadores** (`PERSONA_1`), no los
+  datos reales. Para un resultado legible, pide a Claude que lo guarde («guarda
+  el resumen en resumen.md») y abre el fichero `.revelado` en tu equipo.
+- **Nada impide adjuntar o pegar.** Si arrastras el documento al chat o pegas
+  su contenido, llega a Claude sin anonimizar y el servidor no se entera. No
+  hay aviso en el mensaje, como sí lo hay en Claude Code.
+- **Solo protege lo que pasa por sus herramientas.** Si tienes otros conectores
+  con acceso a los mismos ficheros (un servidor de sistema de archivos, por
+  ejemplo), Claude puede leer el original por ahí.
+- El servidor solo accede a las carpetas que le indiques, y dentro de ellas
+  anonimiza también el texto plano. Comparte el mapa con el plugin de Claude
+  Code si la carpeta principal es la misma.
+
+Probado con Claude Code como cliente MCP; **no se ha probado todavía dentro de
+la app Claude Desktop**.
 
 ## Dónde se guardan los datos
 
@@ -179,8 +226,9 @@ Léelos: un plugin de Claude Code no puede cerrar todas las vías.
   Una orden rebuscada puede leer un original sin que el plugin lo note.
 - **Word con control de cambios, comentarios o cuadros de texto**: puede que la
   conversión no los incluya, o que incluya texto que creías eliminado.
-- **Solo Claude Code.** No funciona en el chat de claude.ai ni en la app de
-  escritorio fuera de la pestaña de código. El revelado en pantalla depende del
+- **El plugin es solo para Claude Code.** En Claude Desktop se usa el servidor
+  MCP, con [menos garantías](#claude-desktop-servidor-mcp); en el chat web de
+  claude.ai no funciona nada de esto. El revelado en pantalla depende del
   evento `MessageDisplay`, que requiere una versión reciente de Claude Code;
   donde no esté disponible verás los identificadores.
 - **Fallo cerrado**: si el plugin no puede anonimizar un fichero, Claude no lo
@@ -226,7 +274,8 @@ Ejecuta cada hook como lo hace Claude Code, con los documentos de `ejemplos/`
 
 ## Hoja de ruta
 
-- **0.3** — Servidor MCP para usarlo desde Claude Desktop.
+- Empaquetar el servidor MCP como extensión de Claude Desktop (`.mcpb`), para
+  instalarlo sin editar la configuración a mano.
 - Anonimizar nombres de fichero, cifrar el mapa, revelar ficheros `.docx`.
 
 ## Licencia

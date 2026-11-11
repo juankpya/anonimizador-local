@@ -6,6 +6,7 @@
     python anonimizar.py carpeta/                 anonimiza una carpeta
     python anonimizar.py --revelar respuesta.md   restaura los datos reales
     python anonimizar.py --estado                 resumen del proyecto actual
+    python anonimizar.py --config-escritorio DIR  configuracion para Claude Desktop
 
 Word, PDF y Excel se convierten a Markdown antes de anonimizar; de las
 imagenes y los PDF escaneados se extrae el texto por OCR; los ficheros de
@@ -173,6 +174,39 @@ def anonimizar(proyecto: str, entrada: Path, salida: Path) -> int:
     return 0 if hechos else 1
 
 
+def config_escritorio(carpetas: list[str]) -> int:
+    """Imprime el bloque que hay que anadir a claude_desktop_config.json."""
+    import json
+
+    interprete = config.python_del_entorno()
+    if interprete is None:
+        print("Falta el entorno. Ejecuta primero:  python instalar.py", file=sys.stderr)
+        return 2
+    argumentos = [str(RAIZ / "servidor_mcp.py")]
+    for carpeta in carpetas:
+        ruta = Path(carpeta).expanduser().resolve()
+        if not ruta.is_dir():
+            print(f"No existe la carpeta: {ruta}", file=sys.stderr)
+            return 2
+        argumentos += ["--carpeta", str(ruta)]
+    bloque = {"mcpServers": {"anonimizador": {"command": str(interprete),
+                                              "args": argumentos}}}
+    if os.name == "nt":
+        destino = r"%APPDATA%\Claude\claude_desktop_config.json"
+    elif sys.platform == "darwin":
+        destino = "~/Library/Application Support/Claude/claude_desktop_config.json"
+    else:
+        destino = "~/.config/Claude/claude_desktop_config.json"
+    print(f"Anade esto a {destino}\n(si ya tiene «mcpServers», anade solo la entrada "
+          f"«anonimizador») y reinicia Claude Desktop:\n", file=sys.stderr)
+    print(json.dumps(bloque, ensure_ascii=False, indent=2))
+    if "plugins" in RAIZ.parts and "cache" in RAIZ.parts:
+        print("\nAVISO: esta copia es la que gestiona Claude Code y su ruta cambia al "
+              "actualizar el plugin. Para Claude Desktop conviene clonar el "
+              "repositorio en una carpeta fija.", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     config.utf8()
     ap = argparse.ArgumentParser(
@@ -185,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="Anonimiza en la cache e imprime la ruta de la copia "
                          "(lo usa el plugin de Claude Code)")
     ap.add_argument("--estado", action="store_true", help="Muestra el estado del proyecto")
+    ap.add_argument("--config-escritorio", action="store_true",
+                    help="Imprime la configuracion del servidor MCP para Claude "
+                         "Desktop; indica la carpeta o carpetas de documentos")
     ap.add_argument("--proyecto", default=os.getcwd(),
                     help="Carpeta del proyecto (por defecto, la actual)")
     ap.add_argument("--salida", default="anonimizados",
@@ -196,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         return estado(proyecto)
     if not args.entrada:
         ap.error("indica un fichero o carpeta")
+    if args.config_escritorio:
+        return config_escritorio(args.entrada)
     if args.revelar:
         return revelar(proyecto, args.entrada)
     if args.preparar:

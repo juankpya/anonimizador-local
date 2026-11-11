@@ -287,6 +287,120 @@ class B_Lectura(Base):
         self.assertIn("ES9121000418450200051332", revelado)
 
 
+@unittest.skipUnless(ENTORNO, "falta el entorno: ejecuta python instalar.py")
+class D_ServidorMCP(Base):
+    """El servidor MCP, hablando JSON-RPC por la entrada y la salida estandar."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.fuera = cls.tmp / "fuera"
+        cls.fuera.mkdir()
+        (cls.fuera / "secreto.txt").write_text("Maria Fernandez Lopez", encoding="utf-8")
+        cls.proceso = subprocess.Popen(
+            [str(ENTORNO), str(RAIZ / "servidor_mcp.py"), "--carpeta", str(cls.proyecto)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            env=cls.env)
+        cls.n = 0
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.proceso.stdin.close()
+        cls.proceso.wait(timeout=30)
+        cls.proceso.stdout.close()
+        super().tearDownClass()
+
+    def pedir(self, metodo: str, **params) -> dict:
+        type(self).n += 1
+        mensaje = {"jsonrpc": "2.0", "id": self.n, "method": metodo, "params": params}
+        self.proceso.stdin.write(json.dumps(mensaje).encode("utf-8") + b"\n")
+        self.proceso.stdin.flush()
+        respuesta = json.loads(self.proceso.stdout.readline().decode("utf-8"))
+        self.assertEqual(respuesta["id"], self.n)
+        return respuesta
+
+    def usar(self, nombre: str, **argumentos) -> tuple[str, bool]:
+        r = self.pedir("tools/call", name=nombre, arguments=argumentos)["result"]
+        return r["content"][0]["text"], r["isError"]
+
+    def sin_fugas(self, texto: str):
+        for real in REALES:
+            self.assertNotIn(real, texto)
+
+    def test_1_protocolo(self):
+        r = self.pedir("initialize", protocolVersion="2025-06-18", capabilities={},
+                       clientInfo={"name": "pruebas", "version": "0"})["result"]
+        self.assertEqual(r["protocolVersion"], "2025-06-18")
+        self.assertIn("leer_documento", r["instructions"])
+        # Las notificaciones no tienen respuesta: la siguiente linea es la de la lista.
+        self.proceso.stdin.write(b'{"jsonrpc":"2.0","method":"notifications/initialized"}\n')
+        nombres = [h["name"] for h in self.pedir("tools/list")["result"]["tools"]]
+        self.assertEqual(sorted(nombres), ["estado", "guardar_revelado", "leer_documento",
+                                           "listar_carpeta", "revelar_fichero"])
+        self.assertIn("error", self.pedir("recursos/inventados"))
+
+    def test_2_leer_documentos(self):
+        for nombre in ("contrato.docx", "contrato.pdf", "clientes.xlsx",
+                       "contrato_foto.png", "originales/contrato.txt"):
+            texto, error = self.usar("leer_documento", ruta=nombre)
+            self.assertFalse(error, texto)
+            self.assertIn("PERSONA_", texto)
+            self.sin_fugas(texto)
+        # El texto plano se anonimiza aunque no este en una carpeta protegida.
+        (self.proyecto / "nota.txt").write_text(
+            "Llamar a Maria Fernandez Lopez, NIF 12345678Z.", encoding="utf-8")
+        texto, error = self.usar("leer_documento", ruta=self.ruta("nota.txt"))
+        self.assertFalse(error, texto)
+        self.sin_fugas(texto)
+
+    def test_3_rutas_prohibidas(self):
+        mapa = next((self.home / "proyectos").glob("*/mapa.json"))
+        (self.proyecto / "x.revelado.md").write_text("Maria Fernandez Lopez", encoding="utf-8")
+        for ruta in (str(self.fuera / "secreto.txt"), "../fuera/secreto.txt", str(mapa),
+                     "x.revelado.md", ".anonimizador.json", "sin_texto.png", "no_existe.pdf"):
+            texto, error = self.usar("leer_documento", ruta=ruta)
+            self.assertTrue(error, ruta)
+            self.sin_fugas(texto)
+
+    def test_4_guardar_revelado(self):
+        texto, error = self.usar("guardar_revelado", ruta="resumen.md",
+                                 texto="La arrendataria es PERSONA_1 (NIF_1).")
+        self.assertFalse(error, texto)
+        self.sin_fugas(texto)
+        guardado = (self.proyecto / "resumen.revelado.md").read_text(encoding="utf-8")
+        self.assertIn("Maria Fernandez Lopez", guardado)
+        self.assertIn("12345678Z", guardado)
+        self.assertTrue(self.usar("leer_documento", ruta="resumen.revelado.md")[1])
+        self.assertTrue(self.usar("guardar_revelado", texto="PERSONA_1",
+                                  ruta=str(self.fuera / "robo.md"))[1])
+        self.assertFalse((self.fuera / "robo.revelado.md").exists())
+        self.assertTrue(self.usar("guardar_revelado", ruta="guion.py", texto="PERSONA_1")[1])
+
+    def test_5_nombres_de_fichero(self):
+        (self.proyecto / "Carta Maria Fernandez Lopez.txt").write_text(
+            "Estimada Maria Fernandez Lopez:", encoding="utf-8")
+        lista, error = self.usar("listar_carpeta")
+        self.assertFalse(error, lista)
+        self.sin_fugas(lista)
+        self.assertNotIn(".revelado.", lista)
+        oculto = next(l.split("  (")[0] for l in lista.splitlines() if l.startswith("Carta "))
+        texto, error = self.usar("leer_documento", ruta=oculto)
+        self.assertFalse(error, texto)
+        self.sin_fugas(texto)
+
+    def test_6_revelar_y_estado(self):
+        (self.proyecto / "informe.md").write_text("Titular: PERSONA_1.", encoding="utf-8")
+        texto, error = self.usar("revelar_fichero", ruta="informe.md")
+        self.assertFalse(error, texto)
+        self.sin_fugas(texto)
+        self.assertIn("Maria Fernandez Lopez",
+                      (self.proyecto / "informe.revelado.md").read_text(encoding="utf-8"))
+        texto, error = self.usar("estado")
+        self.assertFalse(error, texto)
+        self.assertIn("Identificadores en el mapa", texto)
+        self.sin_fugas(texto)
+
+
 class C_Sesion(Base):
     def test_contexto_inicial(self):
         salida = self.hook("sesion.py", {"hook_event_name": "SessionStart"})
