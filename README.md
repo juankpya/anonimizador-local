@@ -22,7 +22,8 @@ en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha vi
 | Claude lee un fichero de texto (`.txt` `.md` `.json` `.xml` `.csv`…) de una carpeta protegida | Se anonimiza tal cual, sin convertir |
 | Claude responde | Ves los datos reales; la conversación guardada conserva los identificadores |
 | Escribes un NIF, IBAN, tarjeta, correo, teléfono o un nombre ya conocido en el mensaje | El mensaje se detiene y **tú decides**: modificarlo o reenviarlo tal cual |
-| Adjuntas una imagen o citas un documento con `@` | Igual: se detiene y tú decides |
+| Citas un documento con `@` | Igual: se detiene y tú decides |
+| Adjuntas una imagen al mensaje | **No siempre se detecta**: ver [Límites](#límites) |
 | Claude intenta leer una imagen | Se te pregunta antes (las imágenes aún no se pueden anonimizar) |
 | Claude intenta abrir un original por otro camino (`cat`, `grep`, editar…) | Se deniega o se te pide confirmación |
 
@@ -155,9 +156,13 @@ Léelos: un plugin de Claude Code no puede cerrar todas las vías.
   aviso solo reconoce NIF/NIE, IBAN, tarjetas, correos, teléfonos y nombres
   completos que ya hayan aparecido en un documento. Un nombre nuevo escrito a
   mano no se detecta.
-- **Los adjuntos no se anonimizan.** El plugin detecta las imágenes pegadas y
-  las menciones con `@`, pero la detección de adjuntos depende de cómo los
-  represente cada versión de Claude Code y puede no cubrir todos los casos.
+- **Los adjuntos no se anonimizan, y las imágenes adjuntas pueden no
+  detectarse.** Las menciones con `@` sí se detienen (comprobado). Pero Claude
+  Code solo entrega al plugin el texto del mensaje: una imagen adjunta por la
+  API o el SDK llega a Claude sin que el plugin la vea (comprobado en la
+  versión 2.1.284). El plugin busca el marcador `[Image #N]` que deja la
+  terminal al pegar una imagen, sin garantía de que aparezca. **No adjuntes
+  capturas ni fotos de documentos con datos personales.**
 - **Los nombres de fichero no se anonimizan.** Si un fichero se llama
   `Contrato Juan Pérez.docx`, Claude ve ese nombre.
 - **Imágenes y PDF escaneados**: sin OCR todavía. Las imágenes se bloquean o se
