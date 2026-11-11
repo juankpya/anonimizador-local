@@ -191,10 +191,15 @@ def tratar_orden(entrada: dict, proyecto: str, cwd: str, cfg: dict) -> None:
         sys.exit(0)
     plana = orden.replace("\\", "/").lower()
 
-    # Las ordenes propias del plugin (instalar, anonimizar, revelar) son el
-    # camino previsto, siempre que no lleven nada encadenado detras.
-    if re.search(r"(anonimizar|instalar)\.py", plana) and not SEPARADORES.search(orden):
-        sys.exit(0)
+    # Las ordenes propias del plugin (preparar, revelar, estado, instalar) son
+    # el camino previsto: se autorizan sin preguntar, siempre que el guion sea
+    # el de ESTE plugin y no lleven nada encadenado ni redirigido.
+    propio = re.search(r"""["']?([^"'\s]*(?:anonimizar|instalar)\.py)["']?""", orden)
+    if propio and not SEPARADORES.search(orden) and "<" not in orden and ">" not in orden:
+        guion = re.search(r"""["']([^"']*(?:anonimizar|instalar)\.py)["']""", orden)
+        ruta_guion = guion.group(1) if guion else propio.group(1)
+        if config.dentro_de(absoluta(ruta_guion, cwd), RAIZ):
+            responder("allow", "Orden propia del plugin anonimizador.")
 
     if ".anonimizador" in plana or ".revelado" in plana:
         denegar("Esta orden toca la carpeta privada del plugin, su configuracion o "

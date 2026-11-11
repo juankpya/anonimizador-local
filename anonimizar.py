@@ -87,20 +87,52 @@ def estado(proyecto: str) -> int:
     return 0
 
 
-def anonimizar(proyecto: str, entrada: Path, salida: Path) -> int:
+def _relanzar_en_entorno() -> int | None:
+    """None si este Python ya tiene las dependencias; si no, relanza la misma
+    orden dentro del entorno virtual y devuelve su codigo de salida."""
     try:
         import markitdown  # noqa: F401
         import presidio_analyzer  # noqa: F401
         import spacy  # noqa: F401
-        from anonimizador import tuberia
+        return None
     except ImportError:
-        # Estamos en un Python sin las dependencias: relanzar en el entorno.
         interprete = config.python_del_entorno()
         if interprete is None or Path(sys.executable).resolve() == interprete.resolve():
             print("Faltan las dependencias. Ejecuta primero:  python instalar.py",
                   file=sys.stderr)
             return 2
         return subprocess.call([str(interprete), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
+def preparar(proyecto: str, ficheros: list[str]) -> int:
+    """Anonimiza en la cache y dice donde esta la copia. Lo usa Claude para los
+    formatos que su herramienta Read rechaza antes de consultar a los hooks
+    (.docx, .xlsx). La salida solo lleva rutas y recuentos."""
+    codigo = _relanzar_en_entorno()
+    if codigo is not None:
+        return codigo
+    from anonimizador import tuberia
+
+    cfg = config.cargar(proyecto)
+    estado = 0
+    for nombre in ficheros:
+        try:
+            if config.clasificar(nombre, proyecto, cfg) != config.ANONIMIZAR:
+                raise ValueError("no es un documento que el plugin anonimice")
+            resultado = tuberia.procesar(proyecto, str(Path(nombre).resolve()), cfg)
+            print(f"COPIA ANONIMIZADA: {resultado['salida']}  "
+                  f"({resultado['entidades']} dato(s) sustituidos)")
+        except Exception as exc:  # noqa: BLE001
+            print(f"ERROR: {type(exc).__name__}: {exc}")
+            estado = 1
+    return estado
+
+
+def anonimizar(proyecto: str, entrada: Path, salida: Path) -> int:
+    codigo = _relanzar_en_entorno()
+    if codigo is not None:
+        return codigo
+    from anonimizador import tuberia
 
     cfg = config.cargar(proyecto)
     admitidas = set(cfg["extensiones_documento"]) | set(cfg["extensiones_texto"])
@@ -147,6 +179,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--revelar", action="store_true",
                     help="Restaura los datos reales en los ficheros indicados "
                          "(crea <nombre>.revelado.<ext>)")
+    ap.add_argument("--preparar", action="store_true",
+                    help="Anonimiza en la cache e imprime la ruta de la copia "
+                         "(lo usa el plugin de Claude Code)")
     ap.add_argument("--estado", action="store_true", help="Muestra el estado del proyecto")
     ap.add_argument("--proyecto", default=os.getcwd(),
                     help="Carpeta del proyecto (por defecto, la actual)")
@@ -161,6 +196,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("indica un fichero o carpeta")
     if args.revelar:
         return revelar(proyecto, args.entrada)
+    if args.preparar:
+        return preparar(proyecto, args.entrada)
     if len(args.entrada) != 1:
         ap.error("indica un solo fichero o carpeta a anonimizar")
     entrada = Path(args.entrada[0])

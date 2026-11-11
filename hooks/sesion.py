@@ -26,16 +26,28 @@ def main() -> None:
         carga = {}
     proyecto = config.proyecto_actual(carga)
     cfg = config.cargar(proyecto)
-    documentos = ", ".join(cfg["extensiones_documento"])
     carpetas = ", ".join(cfg["carpetas_protegidas"]) or "(ninguna)"
+    # Read rechaza estos formatos como "binarios" ANTES de consultar a los
+    # hooks, asi que no se pueden redirigir: necesitan un paso previo.
+    binarios = [e for e in cfg["extensiones_documento"] if e != ".pdf"]
+    guion = str(RAIZ / "anonimizar.py").replace("\\", "/")
+    carpeta = str(Path(proyecto)).replace("\\", "/")
+    orden = f'python "{guion}" --proyecto "{carpeta}" --preparar "<ruta del documento>"'
 
     lineas = [
         "Plugin «anonimizador» activo. Reglas para esta sesion:",
-        f"- Para leer documentos ({documentos}) o cualquier fichero de las carpetas "
-        f"protegidas ({carpetas}) usa SIEMPRE la herramienta Read con la ruta "
-        f"original. El plugin los convierte a Markdown, los anonimiza en local y te "
-        f"entrega esa copia. No los abras con Bash, PowerShell, scripts ni otras "
-        f"herramientas: se denegara o se pedira confirmacion al usuario.",
+        f"- Documentos {', '.join(binarios)}: la herramienta Read no puede abrirlos. "
+        f"Para leer uno ejecuta EXACTAMENTE esta orden, sola, sin encadenar nada "
+        f"(esta autorizada, no pide permiso):\n    {orden}\n"
+        f"  Convierte el documento a Markdown, lo anonimiza en local e imprime "
+        f"«COPIA ANONIMIZADA: <ruta>». Lee despues esa ruta con Read. Admite varias "
+        f"rutas a la vez.",
+        f"- Documentos .pdf y cualquier fichero de las carpetas protegidas "
+        f"({carpetas}): leelos directamente con Read usando su ruta original; el "
+        f"plugin te entrega automaticamente la copia anonimizada.",
+        "- No abras esos documentos de ninguna otra forma (cat, type, pandoc, "
+        "scripts, skills de docx/pdf/xlsx...): se denegara o se pedira "
+        "confirmacion al usuario, porque le llegarian a Anthropic sin anonimizar.",
         "- En esas copias veras identificadores como PERSONA_1, NIF_2 o CORREO_1. "
         "Son valores opacos y estables en todo el proyecto: escribelos exactamente "
         "igual, sin traducirlos, abreviarlos ni intentar deducir el dato real.",

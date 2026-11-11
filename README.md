@@ -184,6 +184,13 @@ Léelos: un plugin de Claude Code no puede cerrar todas las vías.
 | `MessageDisplay` | [hooks/pantalla.py](hooks/pantalla.py) | Muestra los datos reales (`displayContent`) |
 | `SessionStart` | [hooks/sesion.py](hooks/sesion.py) | Explica las reglas a Claude |
 
+Word y Excel dan un paso más que el PDF: la herramienta de lectura de Claude
+Code los rechaza como «binarios» antes de consultar a ningún hook, así que no
+se pueden redirigir. Para ellos Claude ejecuta
+`anonimizar.py --preparar <documento>` (el plugin autoriza esa orden sin
+preguntarte), que deja la copia anonimizada en la caché, y después lee esa
+copia. Verás esa orden en la sesión; es el comportamiento previsto.
+
 Los hooks solo usan la biblioteca estándar de Python y responden en
 milisegundos; la conversión y la detección corren en un proceso aparte dentro
 del entorno virtual. Detección:

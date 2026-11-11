@@ -212,6 +212,23 @@ class B_Lectura(Base):
                        "Vive en Cordoba"):                          # lugar suelto
             self.assertEqual(self.hook("prompt.py", {"prompt": prompt}), {}, prompt)
 
+    def test_91_preparar_autorizado_y_sin_fugas(self):
+        guion = str(RAIZ / "anonimizar.py").replace("\\", "/")
+        orden = f'python "{guion}" --proyecto "{self.proyecto}" --preparar "clientes.xlsx"'
+        self.assertEqual(self.guardia("Bash", command=orden).get("permissionDecision"), "allow")
+        self.assertEqual(self.guardia("PowerShell", command=orden).get("permissionDecision"), "allow")
+        self.assertNotEqual(self.guardia("Bash", command=orden + " > x.txt")
+                            .get("permissionDecision"), "allow")
+        p = subprocess.run([sys.executable, guion, "--proyecto", str(self.proyecto),
+                            "--preparar", "clientes.xlsx", "notas.md"], cwd=self.proyecto,
+                           env=self.env, capture_output=True, text=True, encoding="utf-8")
+        self.assertIn("COPIA ANONIMIZADA:", p.stdout)
+        self.assertIn("ERROR", p.stdout)  # notas.md no es un documento protegido
+        self.comprobar_sin_fugas(p.stdout)
+        copia = p.stdout.split("COPIA ANONIMIZADA: ")[1].split("  (")[0]
+        self.assertEqual(self.guardia("Read", file_path=copia), {})  # la cache se puede leer
+        self.comprobar_sin_fugas(Path(copia).read_text(encoding="utf-8"))
+
     def test_9_cli_revelar(self):
         informe = self.proyecto / "informe.md"
         informe.write_text("Titular: PERSONA_1, cuenta IBAN_1.\n", encoding="utf-8")
