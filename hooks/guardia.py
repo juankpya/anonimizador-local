@@ -96,7 +96,15 @@ def tratar_lectura(entrada: dict, proyecto: str, cwd: str, cfg: dict) -> None:
     ruta = absoluta(ruta, cwd)
     veredicto = config.clasificar(ruta, proyecto, cfg)
 
-    if veredicto in (config.LIBRE, config.CACHE):
+    if veredicto == config.LIBRE:
+        sys.exit(0)
+    if veredicto == config.CACHE:
+        # La copia vive fuera del proyecto, asi que Claude Code pediria permiso
+        # en cada lectura (y lo denegaria en modo no interactivo). Se autoriza
+        # solo la cache de ESTE proyecto; la de otros sigue el cauce normal.
+        if (config.dentro_de(ruta, config.dir_cache(proyecto))
+                and not ruta.endswith(".meta.json") and os.path.isfile(ruta)):
+            responder("allow", "[Anonimizador] Copia anonimizada de este proyecto.")
         sys.exit(0)
     if veredicto == config.BLOQUEAR:
         denegar(

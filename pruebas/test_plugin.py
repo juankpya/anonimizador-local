@@ -265,7 +265,13 @@ class B_Lectura(Base):
         self.assertIn("ERROR", p.stdout)  # notas.md no es un documento protegido
         self.comprobar_sin_fugas(p.stdout)
         copia = p.stdout.split("COPIA ANONIMIZADA: ")[1].split("  (")[0]
-        self.assertEqual(self.guardia("Read", file_path=copia), {})  # la cache se puede leer
+        # La copia esta fuera del proyecto: el plugin la autoriza para que Claude
+        # Code no pida permiso en cada lectura.
+        permiso = self.guardia("Read", file_path=copia)
+        self.assertEqual(permiso.get("permissionDecision"), "allow")
+        self.assertNotIn("updatedInput", permiso)
+        meta = self.guardia("Read", file_path=copia + ".meta.json")
+        self.assertNotEqual(meta.get("permissionDecision"), "allow")
         self.comprobar_sin_fugas(Path(copia).read_text(encoding="utf-8"))
 
     def test_9_cli_revelar(self):

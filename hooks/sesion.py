@@ -57,8 +57,10 @@ def main() -> None:
         "expliques los identificadores salvo que pregunte.",
         "- Los ficheros que escribas contendran identificadores. El usuario puede "
         "restaurar los datos reales con /anonimizador:revelar <fichero>.",
-        "- No leas ~/.anonimizador, ni ficheros '.revelado.', ni modifiques "
-        ".anonimizador.json.",
+        "- De ~/.anonimizador solo puedes leer las copias anonimizadas (las rutas "
+        "«COPIA ANONIMIZADA» de su subcarpeta cache, autorizadas sin pedir "
+        "permiso); el resto contiene datos reales. No leas ficheros '.revelado.' "
+        "ni modifiques .anonimizador.json.",
     ]
     salida = {"hookSpecificOutput": {"hookEventName": "SessionStart",
                                      "additionalContext": "\n".join(lineas)}}
