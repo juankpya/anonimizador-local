@@ -175,8 +175,14 @@ Diferencias con el plugin de Claude Code, que conviene tener claras:
   anonimiza también el texto plano. Comparte el mapa con el plugin de Claude
   Code si la carpeta principal es la misma.
 
-Probado con Claude Code como cliente MCP; **no se ha probado todavía dentro de
-la app Claude Desktop**.
+Probado en Claude Desktop para Windows (5.1231) y con Claude Code como cliente
+MCP.
+
+> **Si el servidor no aparece tras reiniciar**, comprueba que el bloque sigue en
+> el fichero: la app puede reescribirlo al cerrarse y perder una edición hecha
+> mientras estaba abierta. En la versión de Microsoft Store el fichero no está
+> en `%APPDATA%\Claude`, sino en `%LOCALAPPDATA%\Claude-Data\<id>\`; el botón
+> «Editar configuración» abre siempre la carpeta correcta.
 
 ## Dónde se guardan los datos
 

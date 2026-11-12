@@ -64,6 +64,17 @@ def clave(literal: str) -> str:
     return " ".join(literal.split()).casefold().translate(_SIN_TILDES)
 
 
+# Datos que son el mismo se escriban con o sin separadores: un IBAN aparece
+# como "ES9121000418450200051332" en un formulario y como
+# "ES91 2100 0418 4502 0005 1332" en un contrato.
+TIPOS_COMPACTOS = {"IBAN_CODE", "CREDIT_CARD", "PHONE_NUMBER", "ES_NIF", "ES_NIE"}
+_SEPARADORES = re.compile(r"[\s.\-]")
+
+
+def compacta(k: str) -> str:
+    return _SEPARADORES.sub("", k)
+
+
 def _patron_de(k: str) -> str:
     """Expresion regular que encuentra la clave con o sin tildes."""
     partes = []
@@ -151,6 +162,15 @@ class Mapa:
             return None
         k = clave(literal)
         pseudo = self.claves.get(k)
+        if pseudo is None and tipo in TIPOS_COMPACTOS:
+            # Misma cifra con otros separadores: mismo identificador. La nueva
+            # grafia se anota como clave propia para poder sustituirla.
+            c = compacta(k)
+            for otra, candidato in self.claves.items():
+                if self.tipos.get(candidato) == tipo and compacta(otra) == c:
+                    pseudo = self.claves[k] = candidato
+                    self._patron_sustituir = None
+                    break
         if pseudo is None:
             self.contadores[tipo] = self.contadores.get(tipo, 0) + 1
             pseudo = f"{PREFIJOS.get(tipo, tipo)}_{self.contadores[tipo]}"

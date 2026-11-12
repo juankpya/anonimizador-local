@@ -183,6 +183,24 @@ class B_Lectura(Base):
         personas = [r for p, r in mapa.reales.items() if mapa.tipos[p] == "PERSON"]
         self.assertEqual(len([r for r in personas if "maria fernandez" in r.lower()]), 1)
 
+    def test_41_mismo_dato_con_otros_separadores(self):
+        from anonimizador.mapa import Mapa
+        os.environ["ANONIMIZADOR_HOME"] = str(self.tmp / "home-mapa")
+        try:
+            mapa = Mapa(str(self.proyecto))
+            a = mapa.registrar("ES9121000418450200051332", "IBAN_CODE")
+            b = mapa.registrar("ES91 2100 0418 4502 0005 1332", "IBAN_CODE")
+            c = mapa.registrar("ES91 2100 0418 4502 0005 9999", "IBAN_CODE")
+            self.assertEqual(a, b)
+            self.assertNotEqual(a, c)
+            self.assertEqual(mapa.sustituir("Cuenta ES91 2100 0418 4502 0005 1332."),
+                             f"Cuenta {a}.")
+            # Un nombre no se compacta: "Ana Belen" no es "Anabelen".
+            self.assertNotEqual(mapa.registrar("Ana Belen", "PERSON"),
+                                mapa.registrar("Anabelen", "PERSON"))
+        finally:
+            os.environ.pop("ANONIMIZADOR_HOME", None)
+
     def test_5_cache(self):
         a, _ = self.leer("contrato.docx")
         b, _ = self.leer("contrato.docx")
