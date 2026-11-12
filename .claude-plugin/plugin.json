@@ -1,7 +1,7 @@
 {
   "name": "anonimizador",
   "displayName": "Anonimizador local",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Convierte a Markdown y anonimiza en local los documentos (Word, PDF, Excel, texto e imágenes mediante OCR) antes de que Claude los lea, y te muestra las respuestas con los datos reales. Pensado para documentos en español.",
   "license": "MIT",
   "keywords": ["privacidad", "anonimizacion", "pii", "rgpd", "gdpr", "presidio"]

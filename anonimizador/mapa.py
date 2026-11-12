@@ -112,6 +112,16 @@ class Mapa:
             self.claves.setdefault(clave(k), pseudo)
         self.reales = dict(datos.get("reales", {}))
         self.tipos = dict(datos.get("tipos", {}))
+        # Mapas anteriores a la 0.3.1 pueden tener el mismo dato dos veces con
+        # distintos separadores (IBAN_1 e IBAN_2): todas las grafias pasan a
+        # dar el primer identificador. El segundo se conserva en 'reales' para
+        # poder revelar los textos que ya lo usen.
+        primeros: dict[tuple[str, str], str] = {}
+        for k, pseudo in list(self.claves.items()):
+            tipo = self.tipos.get(pseudo)
+            if tipo in TIPOS_COMPACTOS:
+                primero = primeros.setdefault((tipo, compacta(k)), pseudo)
+                self.claves[k] = primero
         self._patron_sustituir = self._patron_revelar = None
 
     def guardar(self) -> None:

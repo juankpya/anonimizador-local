@@ -195,6 +195,14 @@ class B_Lectura(Base):
             self.assertNotEqual(a, c)
             self.assertEqual(mapa.sustituir("Cuenta ES91 2100 0418 4502 0005 1332."),
                              f"Cuenta {a}.")
+            # Un mapa antiguo con el dato duplicado se unifica al cargarlo.
+            mapa.claves["es91 2100 0418 4502 0005 1332"] = "IBAN_7"
+            mapa.reales["IBAN_7"] = "ES91 2100 0418 4502 0005 1332"
+            mapa.tipos["IBAN_7"] = "IBAN_CODE"
+            mapa.guardar()
+            viejo = Mapa(str(self.proyecto))
+            self.assertEqual(viejo.sustituir("ES91 2100 0418 4502 0005 1332"), a)
+            self.assertEqual(viejo.revelar("IBAN_7")[1], 1)
             # Un nombre no se compacta: "Ana Belen" no es "Anabelen".
             self.assertNotEqual(mapa.registrar("Ana Belen", "PERSON"),
                                 mapa.registrar("Anabelen", "PERSON"))
