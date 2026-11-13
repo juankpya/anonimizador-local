@@ -315,7 +315,11 @@ class B_Lectura(Base):
 
 @unittest.skipUnless(ENTORNO, "falta el entorno: ejecuta python instalar.py")
 class D_ServidorMCP(Base):
-    """El servidor MCP, hablando JSON-RPC por la entrada y la salida estandar."""
+    """El servidor MCP, hablando JSON-RPC por la entrada y la salida estandar.
+    Aqui el usuario responde NO a la ventana de confianza."""
+
+    CONFIANZA = "no"
+    CON_CARPETA = True
 
     @classmethod
     def setUpClass(cls):
@@ -323,10 +327,12 @@ class D_ServidorMCP(Base):
         cls.fuera = cls.tmp / "fuera"
         cls.fuera.mkdir()
         (cls.fuera / "secreto.txt").write_text("Maria Fernandez Lopez", encoding="utf-8")
+        orden = [str(ENTORNO), str(RAIZ / "servidor_mcp.py")]
+        if cls.CON_CARPETA:
+            orden += ["--carpeta", str(cls.proyecto)]
         cls.proceso = subprocess.Popen(
-            [str(ENTORNO), str(RAIZ / "servidor_mcp.py"), "--carpeta", str(cls.proyecto)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            env=cls.env)
+            orden, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            env=dict(cls.env, ANONIMIZADOR_CONFIANZA=cls.CONFIANZA))
         cls.n = 0
 
     @classmethod
@@ -425,6 +431,63 @@ class D_ServidorMCP(Base):
         self.assertFalse(error, texto)
         self.assertIn("Identificadores en el mapa", texto)
         self.sin_fugas(texto)
+
+
+@unittest.skipUnless(ENTORNO, "falta el entorno: ejecuta python instalar.py")
+class E_ServidorSinCarpeta(D_ServidorMCP):
+    """Servidor sin --carpeta: el usuario acepta la ventana de confianza."""
+
+    CONFIANZA = "si"
+    CON_CARPETA = False
+
+    def test_1_protocolo(self):
+        texto, error = self.usar("estado")
+        self.assertFalse(error, texto)
+        self.assertIn("ninguna todavia", texto)
+
+    def test_2_leer_documentos(self):
+        # Sin carpeta de trabajo, una ruta relativa no dice nada.
+        self.assertTrue(self.usar("leer_documento", ruta="contrato.docx")[1])
+        self.assertTrue(self.usar("listar_carpeta")[1])
+        # Con la ruta completa se pide confianza (aceptada) y se lee.
+        texto, error = self.usar("leer_documento", ruta=self.ruta("contrato.docx"))
+        self.assertFalse(error, texto)
+        self.assertIn("PERSONA_", texto)
+        self.sin_fugas(texto)
+        confianza = json.loads((self.home / "confianza.json").read_text(encoding="utf-8"))
+        self.assertEqual([config.normalizar(c) for c in confianza["carpetas"]],
+                         [config.normalizar(self.proyecto)])
+        # Desde ahi ya valen las rutas relativas, y la otra carpeta tambien se acepta.
+        self.assertFalse(self.usar("leer_documento", ruta="contrato.pdf")[1])
+        texto, error = self.usar("leer_documento", ruta=str(self.fuera / "secreto.txt"))
+        self.assertFalse(error, texto)
+        self.sin_fugas(texto)
+
+    def test_3_rutas_prohibidas(self):
+        # Ni con la confianza aceptada: carpetas demasiado amplias e internas.
+        mapa = next((self.home / "proyectos").glob("*/mapa.json"))
+        for ruta in (str(Path.home()), str(Path.home().parent), Path.home().anchor,
+                     str(mapa), str(self.home / "confianza.json"),
+                     self.ruta("x.revelado.md")):
+            texto, error = self.usar("listar_carpeta" if os.path.isdir(ruta)
+                                     else "leer_documento", ruta=ruta)
+            self.assertTrue(error, ruta)
+        confianza = json.loads((self.home / "confianza.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(confianza["carpetas"]), 2)
+
+    def test_4_guardar_revelado(self):
+        texto, error = self.usar("guardar_revelado", ruta=self.ruta("resumen.md"),
+                                 texto="La arrendataria es PERSONA_1.")
+        self.assertFalse(error, texto)
+        self.assertIn("Maria Fernandez Lopez",
+                      (self.proyecto / "resumen.revelado.md").read_text(encoding="utf-8"))
+
+    def test_5_nombres_de_fichero(self):
+        pass
+
+    def test_6_revelar_y_estado(self):
+        texto, _ = self.usar("estado")
+        self.assertEqual(texto.count("  - "), 2)
 
 
 class C_Sesion(Base):

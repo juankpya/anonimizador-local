@@ -2,16 +2,22 @@
 # -*- coding: utf-8 -*-
 """Servidor MCP del anonimizador, para Claude Desktop y otros clientes MCP.
 
-    python servidor_mcp.py --carpeta "C:/Clientes" [--carpeta OTRA ...]
+    python servidor_mcp.py [--carpeta "C:/Clientes" ...]
 
 Claude Desktop no tiene hooks: no se puede interceptar lo que lee ni cambiar lo
 que muestra. Este servidor ofrece lo que si es posible alli: herramientas con
 las que Claude lee los documentos YA anonimizados y guarda sus resultados con
 los datos reales restaurados, sin llegar a verlos.
 
-Solo se accede a las carpetas indicadas con --carpeta. La primera es el
+El usuario pide los documentos por su ruta, esten donde esten. La primera vez
+que se toca una carpeta, el servidor abre una ventana del sistema para que el
+usuario diga si confia en ella; la respuesta se recuerda en
+~/.anonimizador/confianza.json. Esa ventana no pasa por Claude.
+
+Con --carpeta se da acceso de antemano, sin preguntar. La primera es el
 "proyecto": decide que mapa de identificadores se usa (el mismo que usa el
-plugin de Claude Code en esa carpeta) y donde se busca .anonimizador.json.
+plugin de Claude Code en esa carpeta) y donde se busca .anonimizador.json. Sin
+ninguna, el servidor usa un mapa propio, comun a todas las carpetas.
 
 Habla MCP por la entrada y la salida estandar (JSON-RPC, una linea por
 mensaje). El protocolo esta implementado con la biblioteca estandar; el motor
@@ -37,6 +43,7 @@ VERSIONES_MCP = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
 EXT_REVELABLES = {".txt", ".md", ".json", ".xml", ".csv", ".log", ".yaml", ".yml",
                   ".html", ".htm", ".eml", ".tex", ".rst"}
 TROZO = 100_000  # caracteres por llamada a leer_documento
+ESPERA_MS = 120_000  # tiempo para responder a la ventana de confianza
 
 INSTRUCCIONES = """\
 Este servidor permite trabajar con documentos que contienen datos personales \
@@ -52,7 +59,10 @@ Cuando el usuario necesite un resultado con los datos reales (un resumen, una \
 carta, un informe), escribelo con identificadores y guardalo con \
 guardar_revelado: el fichero resultante lleva los datos reales y el usuario lo \
 abre en su equipo. Tu solo recibes un recuento.
-- No puedes leer los ficheros '.revelado.' ni el mapa de identificadores."""
+- No puedes leer los ficheros '.revelado.' ni el mapa de identificadores.
+- Usa rutas completas. La primera vez que accedes a una carpeta, el usuario ve \
+en su equipo una ventana que le pregunta si confia en ella; avisale de que la \
+vera. Si la rechaza, no insistas."""
 
 
 class Rechazo(Exception):
@@ -63,11 +73,109 @@ class Rechazo(Exception):
 # Carpetas y rutas
 # --------------------------------------------------------------------------- #
 
+def preguntar_confianza(carpeta: str) -> bool:
+    """Pregunta AL USUARIO, con una ventana del sistema, si confia en una
+    carpeta. No pasa por Claude: el modelo no puede responder por el usuario.
+    Sin respuesta en dos minutos, o si no se puede mostrar la ventana, es NO."""
+    forzado = os.environ.get("ANONIMIZADOR_CONFIANZA")  # solo para las pruebas
+    if forzado:
+        return forzado == "si"
+    titulo = "Anonimizador local"
+    texto = ("Claude quiere leer documentos de esta carpeta:\n\n"
+             f"{carpeta}\n\n"
+             "¿Confías en ella? Si aceptas, el anonimizador podrá leer sus "
+             "ficheros y subcarpetas (Claude recibirá solo las copias "
+             "anonimizadas) y guardar resultados en ella, ahora y en adelante.")
+    try:
+        if os.name == "nt":
+            import ctypes
+            # SI/NO | icono de pregunta | NO por defecto | siempre delante
+            estilo = 0x04 | 0x20 | 0x100 | 0x1000 | 0x10000
+            try:
+                r = ctypes.windll.user32.MessageBoxTimeoutW(
+                    None, texto, titulo, estilo, 0, ESPERA_MS)
+            except AttributeError:
+                r = ctypes.windll.user32.MessageBoxW(None, texto, titulo, estilo)
+            return r == 6  # IDYES
+        import shutil
+        import subprocess
+        if sys.platform == "darwin":
+            guion = ('display dialog (item 1 of argv) with title (item 2 of argv) '
+                     'buttons {"No", "Sí"} default button "No" giving up after 120')
+            r = subprocess.run(["osascript", "-e", f"on run argv\n{guion}\nend run",
+                                texto, titulo], capture_output=True, text=True, timeout=130)
+            return "Sí" in r.stdout
+        if shutil.which("zenity"):
+            return subprocess.run(["zenity", "--question", "--default-cancel",
+                                   "--title", titulo, "--text", texto, "--timeout", "120"],
+                                  timeout=130).returncode == 0
+        if shutil.which("kdialog"):
+            return subprocess.run(["kdialog", "--title", titulo, "--warningyesno", texto],
+                                  timeout=130).returncode == 0
+    except Exception as exc:  # noqa: BLE001 - sin ventana no hay confianza
+        print(f"anonimizador/mcp: no se pudo preguntar: {exc!r}", file=sys.stderr, flush=True)
+    return False
+
+
+def demasiado_amplia(carpeta: str) -> bool:
+    """Raices de disco, la carpeta personal (o una superior) y las del sistema:
+    confiar en ellas equivaldria a no tener limite."""
+    p = Path(carpeta)
+    if p == Path(p.anchor) or config.dentro_de(Path.home(), carpeta):
+        return True
+    sistema = [os.environ.get(v) for v in ("SystemRoot", "ProgramFiles",
+                                           "ProgramFiles(x86)", "ProgramData")]
+    sistema += ["/etc", "/usr", "/bin", "/var", "/System", "/Library"] if os.name != "nt" else []
+    return any(s and config.dentro_de(carpeta, s) for s in sistema)
+
+
 class Servidor:
     def __init__(self, carpetas: list[str]):
-        self.carpetas = [os.path.realpath(os.path.expanduser(c)) for c in carpetas]
-        self.proyecto = self.carpetas[0]
+        self.fijas = [os.path.realpath(os.path.expanduser(c)) for c in carpetas]
+        # Sin carpeta principal, el mapa de identificadores es uno propio del
+        # servidor, comun a todas las carpetas en las que se confie.
+        self.proyecto = self.fijas[0] if self.fijas else str(config.home() / "escritorio")
+        self.actual = self.fijas[0] if self.fijas else None  # base de las rutas relativas
         self.tuberia = None
+
+    # -- carpetas de confianza ---------------------------------------------- #
+
+    @property
+    def _fichero_confianza(self) -> Path:
+        return config.home() / "confianza.json"
+
+    def confiadas(self) -> list[str]:
+        try:
+            datos = json.loads(self._fichero_confianza.read_text(encoding="utf-8"))
+            return [c for c in datos.get("carpetas", []) if isinstance(c, str)]
+        except (OSError, ValueError, AttributeError):
+            return []
+
+    @property
+    def carpetas(self) -> list[str]:
+        return self.fijas + [c for c in self.confiadas() if c not in self.fijas]
+
+    def pedir_confianza(self, ruta: str) -> None:
+        """Pide al usuario que confie en la carpeta de 'ruta'; Rechazo si no."""
+        carpeta = ruta if os.path.isdir(ruta) else os.path.dirname(ruta)
+        if not os.path.isdir(carpeta):
+            raise Rechazo("No existe esa carpeta.")
+        if demasiado_amplia(carpeta):
+            raise Rechazo("Esa carpeta es demasiado amplia para darle acceso (una raiz "
+                          "de disco, la carpeta personal o una del sistema). Pide al "
+                          "usuario que mueva los documentos a una carpeta de trabajo.")
+        if not preguntar_confianza(carpeta):
+            raise Rechazo("El usuario no ha dado su confianza a esa carpeta (ha "
+                          "respondido que no, o no ha respondido a la ventana de "
+                          "confirmacion). No insistas: preguntale si quiere usarla.")
+        lista = self.confiadas()
+        if carpeta not in lista:
+            lista.append(carpeta)
+            config.home().mkdir(parents=True, exist_ok=True)
+            temporal = self._fichero_confianza.with_suffix(".tmp")
+            temporal.write_text(json.dumps({"carpetas": lista}, ensure_ascii=False, indent=1),
+                                encoding="utf-8")
+            os.replace(temporal, self._fichero_confianza)
 
     def cfg(self) -> dict:
         return config.cargar(self.proyecto)
@@ -99,23 +207,28 @@ class Servidor:
         for c in candidatas:
             c = os.path.expanduser(c)
             if not os.path.isabs(c):
-                c = os.path.join(self.proyecto, c)
+                if self.actual is None:
+                    raise Rechazo("Indica la ruta completa del fichero o de la carpeta "
+                                  "(por ejemplo C:\\Clientes\\contrato.docx): todavia no "
+                                  "hay ninguna carpeta de trabajo.")
+                c = os.path.join(self.actual, c)
             # realpath resuelve '..' y enlaces simbolicos. Si ninguna existe
             # (fichero nuevo), vale la ultima: la del nombre real.
             elegida = os.path.realpath(c)
             if os.path.exists(elegida):
                 break
-        if not self.permitida(elegida):
-            raise Rechazo("Esa ruta esta fuera de las carpetas a las que este servidor "
-                          "tiene acceso. Usa `estado` para ver cuales son.")
         nombre = os.path.basename(elegida).lower()
         if (config.dentro_de(elegida, config.home()) or ".revelado." in nombre
                 or nombre.endswith(".revelado") or nombre == config.NOMBRE_CONFIG_PROYECTO):
             raise Rechazo("Ese fichero no se puede leer: contiene datos reales "
                           "restaurados o es un fichero interno del anonimizador.")
+        if not self.permitida(elegida):
+            # Carpeta nueva: decide el usuario, en una ventana aparte.
+            self.pedir_confianza(elegida)
         if debe_existir and not os.path.exists(elegida):
             raise Rechazo("No existe ese fichero o carpeta. Usa `listar_carpeta` para "
                           "ver los nombres disponibles.")
+        self.actual = elegida if os.path.isdir(elegida) else os.path.dirname(elegida)
         return elegida
 
     # ----------------------------------------------------------------------- #
@@ -163,7 +276,10 @@ class Servidor:
         return "".join(cabecera) + "]\n\n" + trozo
 
     def listar_carpeta(self, ruta: str = "") -> str:
-        carpeta = self.resolver(ruta) if ruta else self.proyecto
+        if not ruta and self.actual is None:
+            raise Rechazo("Indica la ruta completa de la carpeta: todavia no hay "
+                          "ninguna carpeta de trabajo.")
+        carpeta = self.resolver(ruta) if ruta else self.actual
         if not os.path.isdir(carpeta):
             raise Rechazo("Eso no es una carpeta.")
         lineas = []
@@ -232,7 +348,11 @@ class Servidor:
         cfg = self.cfg()
         lineas = [f"Anonimizador local {__version__} (servidor MCP)",
                   "Carpetas accesibles:"]
-        lineas += [f"  - {self.ocultar(c)}" for c in self.carpetas]
+        lineas += [f"  - {self.ocultar(c)}" for c in self.carpetas] or ["  (ninguna todavia)"]
+        lineas.append("Para cualquier otra carpeta se pide confirmacion al usuario en una "
+                      "ventana aparte la primera vez; usa rutas completas.")
+        if self.actual:
+            lineas.append(f"Las rutas relativas parten de: {self.ocultar(self.actual)}")
         interprete = config.python_del_entorno()
         lineas.append("Motor instalado: " + ("si" if interprete else
                                              "NO (falta ejecutar instalar.py)"))
@@ -404,11 +524,10 @@ def servir(servidor: Servidor) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Servidor MCP del anonimizador local.")
     ap.add_argument("--carpeta", action="append", default=[],
-                    help="Carpeta a la que el servidor tiene acceso (repetible). "
-                         "La primera es la principal.")
+                    help="Carpeta con acceso desde el principio, sin preguntar "
+                         "(opcional, repetible). Para las demas se pide "
+                         "confirmacion al usuario la primera vez.")
     args = ap.parse_args(argv)
-    if not args.carpeta:
-        ap.error("indica al menos una carpeta con --carpeta")
     for carpeta in args.carpeta:
         if not os.path.isdir(os.path.expanduser(carpeta)):
             ap.error(f"no existe la carpeta: {carpeta}")

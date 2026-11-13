@@ -11,7 +11,7 @@ recibe esa copia. Cuando responde, el plugin **vuelve a poner los datos reales
 en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha visto
 `PERSONA_1`.
 
-> **Estado: versión 0.3, alfa.** La detección es probabilística: reduce mucho
+> **Estado: versión 0.4, alfa.** La detección es probabilística: reduce mucho
 > la exposición de datos personales, pero **no garantiza** que no se escape
 > ninguno. Lee el apartado [Límites](#límites) antes de usarlo con datos reales.
 
@@ -140,17 +140,39 @@ interceptar lecturas ni cambiar lo que se muestra. En su lugar hay un servidor
 MCP con herramientas que Claude usa para leer los documentos ya anonimizados.
 
 1. Clona este repositorio en una carpeta fija y ejecuta `python instalar.py`.
-2. Genera la configuración indicando la carpeta (o carpetas) de documentos:
+2. Genera la configuración:
 
    ```
-   python anonimizar.py --config-escritorio "C:\Clientes"
+   python anonimizar.py --config-escritorio
    ```
 
 3. Copia el bloque que imprime en `claude_desktop_config.json` (Ajustes →
    Desarrollador → Editar configuración) y reinicia Claude Desktop.
 
-Después pide los documentos por su nombre o ruta: «lee contrato.docx y
-resúmelo».
+Después pide los documentos por su ruta completa, estén donde estén: «lee
+C:\Clientes\contrato.docx y resúmelo». Dentro de la misma carpeta ya basta con
+el nombre.
+
+### Carpetas de confianza
+
+La primera vez que Claude pide algo de una carpeta, el anonimizador abre **una
+ventana de tu sistema** preguntándote si confías en ella, igual que al abrir un
+proyecto nuevo:
+
+- **Sí**: se recuerda en `~/.anonimizador/confianza.json` y no se vuelve a
+  preguntar, ni para esa carpeta ni para sus subcarpetas. Para retirar la
+  confianza, borra la línea de ese fichero.
+- **No**, o si no respondes en dos minutos: Claude recibe un rechazo.
+
+La ventana la muestra el anonimizador, no Claude: el modelo no puede
+contestarla por ti. Nunca se ofrece confiar en una raíz de disco, en tu carpeta
+personal entera ni en carpetas del sistema; son demasiado amplias.
+
+Si prefieres dar acceso de antemano y sin ventana, indica las carpetas al
+generar la configuración: `python anonimizar.py --config-escritorio "C:\Clientes"`.
+La primera hace además de carpeta principal y comparte el mapa de
+identificadores con el plugin de Claude Code cuando se usa en ella. Sin ninguna,
+el servidor usa un único mapa para todas las carpetas.
 
 | Herramienta | Qué hace |
 |---|---|
@@ -171,9 +193,8 @@ Diferencias con el plugin de Claude Code, que conviene tener claras:
 - **Solo protege lo que pasa por sus herramientas.** Si tienes otros conectores
   con acceso a los mismos ficheros (un servidor de sistema de archivos, por
   ejemplo), Claude puede leer el original por ahí.
-- El servidor solo accede a las carpetas que le indiques, y dentro de ellas
-  anonimiza también el texto plano. Comparte el mapa con el plugin de Claude
-  Code si la carpeta principal es la misma.
+- El servidor solo accede a las carpetas en las que confíes, y dentro de ellas
+  anonimiza también el texto plano.
 
 Probado en Claude Desktop para Windows (5.1231) y con Claude Code como cliente
 MCP.

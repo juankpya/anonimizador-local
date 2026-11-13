@@ -6,4 +6,4 @@ Modulos pesados (solo se cargan dentro del entorno virtual):
     conversion, motor, tuberia
 """
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"

@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--estado", action="store_true", help="Muestra el estado del proyecto")
     ap.add_argument("--config-escritorio", action="store_true",
                     help="Imprime la configuracion del servidor MCP para Claude "
-                         "Desktop; indica la carpeta o carpetas de documentos")
+                         "Desktop. Opcional: carpetas con acceso sin preguntar")
     ap.add_argument("--proyecto", default=os.getcwd(),
                     help="Carpeta del proyecto (por defecto, la actual)")
     ap.add_argument("--salida", default="anonimizados",
@@ -231,10 +231,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.estado:
         return estado(proyecto)
+    if args.config_escritorio:
+        return config_escritorio(args.entrada)  # las carpetas son opcionales
     if not args.entrada:
         ap.error("indica un fichero o carpeta")
-    if args.config_escritorio:
-        return config_escritorio(args.entrada)
     if args.revelar:
         return revelar(proyecto, args.entrada)
     if args.preparar:
