@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -80,6 +81,19 @@ def main() -> int:
             try:
                 with urllib.request.urlopen(peticion, timeout=60) as r:
                     ruta.write_bytes(r.read())
+            except urllib.error.HTTPError as exc:
+                if exc.code == 429:
+                    # Wikimedia a veces bloquea un fichero concreto para una
+                    # conexion durante horas, miniaturas incluidas. Insistir
+                    # no sirve: se puede bajar a mano desde el navegador.
+                    print(f"[bloqueado] {f['fichero']}: Wikimedia responde 429 (demasiadas peticiones).\n"
+                          f"    Descargalo a mano desde {f['pagina']}\n"
+                          f"    (boton 'Descargar', tamano original) y guardalo como:\n"
+                          f"    {ruta}\n"
+                          f"    Al volver a lanzar este script se usara el fichero guardado.")
+                else:
+                    print(f"[error] {f['fichero']}: {exc}")
+                continue
             except OSError as exc:
                 print(f"[error] {f['fichero']}: {exc}")
                 continue
