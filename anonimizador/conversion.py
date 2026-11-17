@@ -80,12 +80,37 @@ def _componer(cajas, textos, confianzas) -> str:
     return "\n".join(salida)
 
 
-def ocr_imagen(imagen) -> str:
-    """Texto de una imagen (ruta o imagen PIL). Cadena vacia si no hay texto."""
-    resultado = _ocr()(imagen)
+def _leido(resultado) -> tuple[str, int, float]:
+    """(texto, caracteres fiables, fraccion de cajas verticales)."""
     if resultado is None or not getattr(resultado, "txts", None):
-        return ""
-    return _componer(resultado.boxes, resultado.txts, resultado.scores)
+        return "", 0, 0.0
+    fiables = sum(len(t) for t, s in zip(resultado.txts, resultado.scores) if s >= CONFIANZA_MINIMA)
+    verticales = 0
+    for caja in resultado.boxes:
+        xs, ys = [p[0] for p in caja], [p[1] for p in caja]
+        if (max(ys) - min(ys)) > 1.5 * (max(xs) - min(xs)):
+            verticales += 1
+    return (_componer(resultado.boxes, resultado.txts, resultado.scores), fiables,
+            verticales / len(resultado.boxes))
+
+
+def ocr_imagen(imagen) -> str:
+    """Texto de una imagen (ruta o imagen PIL). Cadena vacia si no hay texto.
+
+    Si la imagen parece girada 90 grados (muchas cajas de texto verticales, o
+    casi nada legible), se prueba tambien girada a cada lado y se queda la
+    lectura con mas texto fiable. El motor de OCR solo endereza 180 grados."""
+    texto, fiables, verticales = _leido(_ocr()(imagen))
+    if verticales < 0.3 and fiables >= 40:
+        return texto
+    from PIL import Image
+    original = Image.open(imagen) if isinstance(imagen, (str, Path)) else imagen
+    original = original.convert("RGB")
+    for angulo in (90, 270):
+        otro, otros_fiables, _ = _leido(_ocr()(original.rotate(angulo, expand=True)))
+        if otros_fiables > fiables * 1.2:
+            texto, fiables = otro, otros_fiables
+    return texto
 
 
 # --------------------------------------------------------------------------- #

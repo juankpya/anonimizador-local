@@ -11,7 +11,7 @@ recibe esa copia. Cuando responde, el plugin **vuelve a poner los datos reales
 en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha visto
 `PERSONA_1`.
 
-> **Estado: versión 0.4, alfa.** La detección es probabilística: reduce mucho
+> **Estado: versión 0.5, alfa.** La detección es probabilística: reduce mucho
 > la exposición de datos personales, pero **no garantiza** que no se escape
 > ninguno. Lee el apartado [Límites](#límites) antes de usarlo con datos reales.
 
@@ -226,7 +226,10 @@ Léelos: un plugin de Claude Code no puede cerrar todas las vías.
 - **La detección falla a veces.** Se le escapan datos (sobre todo nombres poco
   comunes, fechas de nacimiento, direcciones y códigos internos) y a veces
   sustituye palabras normales. Revisa los informes de detección y usa
-  `terminos` y `permitidos`.
+  `terminos` y `permitidos`. Para los teléfonos españoles basta con que haya
+  nueve cifras seguidas que empiecen por 6, 7, 8 o 9, así que una referencia
+  o un importe con esa forma también se sustituirá. La
+  [batería de fugas](#batería-de-fugas) mide todo esto con documentos de prueba.
 - **Lo que escribes o pegas en el mensaje no se anonimiza**, solo se avisa. Y el
   aviso solo reconoce NIF/NIE, IBAN, tarjetas, correos, teléfonos y nombres
   completos que ya hayan aparecido en un documento. Un nombre nuevo escrito a

@@ -42,6 +42,7 @@ PREFIJOS = {
     "MAC_ADDRESS": "MAC",
     "UUID": "UUID",
     "TERMINO_PROPIO": "TERMINO",
+    "MRZ": "MRZ",
 }
 
 # Literales mas cortos se ignoran: un token de 2 caracteres ("E2") detectado
@@ -196,12 +197,21 @@ class Mapa:
         if self._patron_sustituir is None and self.claves:
             # Mas largo primero: "Juan Perez" antes que "Juan".
             ordenadas = sorted(self.claves, key=len, reverse=True)
-            partes = [_patron_de(k) for k in ordenadas]
             # Limites de palabra: sin ellos "Ana" se comeria parte de "Anastasia".
-            self._patron_sustituir = re.compile(
-                rf"(?<![{_ALFANUM}_])(?:" + "|".join(partes) + rf")(?![{_ALFANUM}_])",
-                re.IGNORECASE,
-            )
+            # Un dato que empieza o acaba en cifra solo exige que no haya otra
+            # cifra pegada: el OCR une a veces el numero con la palabra vecina
+            # ("699487221Correo", "al+34612...").
+            partes = []
+            for k in ordenadas:
+                if k[:1] == "+":
+                    antes = ""
+                elif k[:1].isdigit():
+                    antes = r"(?<!\d)"
+                else:
+                    antes = rf"(?<![{_ALFANUM}_])"
+                despues = r"(?!\d)" if k[-1:].isdigit() else rf"(?![{_ALFANUM}_])"
+                partes.append(antes + _patron_de(k) + despues)
+            self._patron_sustituir = re.compile("|".join(partes), re.IGNORECASE)
         return self._patron_sustituir
 
     def sustituir(self, texto: str) -> str:

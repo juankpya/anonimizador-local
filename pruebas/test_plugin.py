@@ -271,6 +271,38 @@ class B_Lectura(Base):
         self.assertIn("PERSONA_", texto)
         self.comprobar_sin_fugas(texto)
 
+    def test_95_formatos_dificiles(self):
+        """Fugas que encontro la bateria de pruebas (pruebas/bateria)."""
+        datos = ["699 487 221", "612-345-678", "957.412.380", "699487221", "+34612345678",
+                 "ES64 0081 0216 0073 0001 2345", "48.291.736-Q", "48291736 Q", "Y-4567890-N", "30561278M",
+                 "Peña", "ETXEBERRIA GOIKOETXEA", "ROSSI", "GONZALEZ<RODRIGUEZ<<MARIANA"]
+        (self.proyecto / "originales" / "dificil.txt").write_text(
+            "Teléfonos: 699 487 221, 612-345-678 y fijo 957.412.380.\n"
+            "Teléfono: 699487221Correo: x@example.com\nnota a1+34612345678\n"
+            "Pago a la cuenta ES64 0081 0216 0073 0001 2345 antes del día 5.\n"
+            "NIF 48.291.736-Q, también escrito 48291736 Q; NIE Y-4567890-N.\n"
+            "\"María José Ibáñez Peña\";30561278M;mj@example.net;699 487 221\n"
+            "APELLIDOS\nETXEBERRIA GOIKOETXEA\nNOMBRE\nXABIER\n"
+            "COGNOME/SURNAME\nROSSI\n"
+            "IDARG99999999<4<<<<<<<<<<<<<<<\nGONZALEZ<RODRIGUEZ<<MARIANA<FL\n"
+            "Control: el pedido 2026-0417 por 1.240,00 euros vence en 30 días.\n",
+            encoding="utf-8")
+        _, texto = self.leer("originales", "dificil.txt")
+        for dato in datos:
+            self.assertNotIn(dato, texto)
+        self.assertIn("2026-0417", texto)       # sin exceso de celo en referencias
+        self.assertIn("1.240,00", texto)
+        self.assertIn("NOMBRE", texto)          # la etiqueta se queda
+
+    def test_96_ocr_imagen_girada(self):
+        from PIL import Image
+        imagen = Image.open(self.proyecto / "contrato_foto.png").rotate(90, expand=True)
+        imagen.save(self.proyecto / "originales" / "girada.png")
+        _, texto = self.leer("originales", "girada.png")
+        self.assertIn("PERSONA_", texto)
+        self.assertIn("NIF_", texto)
+        self.comprobar_sin_fugas(texto)
+
     def test_94_imagen_sin_texto(self):
         fuera = self.guardia("Read", file_path=self.ruta("sin_texto.png"))
         self.assertEqual(fuera.get("permissionDecision"), "ask")
