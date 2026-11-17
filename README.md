@@ -14,7 +14,7 @@ en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha vi
 > **¿Solo quieres usarlo?** Empieza por la [guía de uso](GUIA.md): instalación
 > paso a paso, uso diario y problemas frecuentes.
 
-> **Estado: versión 0.5, alfa.** La detección es probabilística: reduce mucho
+> **Estado: versión 0.6, alfa.** La detección es probabilística: reduce mucho
 > la exposición de datos personales, pero **no garantiza** que no se escape
 > ninguno. Lee el apartado [Límites](#límites) antes de usarlo con datos reales.
 
@@ -141,6 +141,28 @@ python servidor_mcp.py --carpeta DIR         # servidor MCP (lo lanza el cliente
 La app de escritorio no tiene hooks, así que allí el plugin no puede
 interceptar lecturas ni cambiar lo que se muestra. En su lugar hay un servidor
 MCP con herramientas que Claude usa para leer los documentos ya anonimizados.
+
+### Instalación como extensión (recomendada)
+
+1. Descarga `anonimizador-local-<versión>.mcpb` de la página de
+   [versiones publicadas](https://github.com/juankpya/anonimizador-local/releases)
+   o genéralo tú con `python mcpb/empaquetar.py` (queda en `dist/`).
+2. Ábrelo con doble clic, o arrástralo a Claude Desktop (Ajustes →
+   Extensiones), y pulsa **Instalar**. Opcionalmente, elige carpetas con
+   acceso directo.
+3. La primera vez que Claude lea un documento, una ventana te pregunta si
+   instalar el motor (~1 GB, una sola vez). Al terminar, reinicia Claude
+   Desktop. Si ya lo tenías instalado por el plugin o con `instalar.py`, se
+   usa ese y no se pregunta nada.
+
+La extensión necesita un `python` 3.10 – 3.13 accesible en el PATH (Claude
+Desktop no trae Python). El paquete solo lleva el servidor, de unos 40 KB: el
+motor tiene binarios distintos por sistema y no cabe en un paquete portable.
+
+Si antes lo configuraste a mano en `claude_desktop_config.json`, quita esa
+entrada (con la app cerrada) para no tener las herramientas duplicadas.
+
+### Instalación manual
 
 1. Clona este repositorio en una carpeta fija y ejecuta `python instalar.py`.
 2. Genera la configuración:
@@ -329,8 +351,7 @@ Desktop.
 
 ## Hoja de ruta
 
-- Empaquetar el servidor MCP como extensión de Claude Desktop (`.mcpb`), para
-  instalarlo sin editar la configuración a mano.
+- Firmar la extensión `.mcpb` y publicarla en cada versión.
 - Anonimizar nombres de fichero, cifrar el mapa, revelar ficheros `.docx`.
 
 ## Licencia

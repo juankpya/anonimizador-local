@@ -19,6 +19,9 @@ Informe_anonimizacion_local.md
 Prompt_anonimizacion_documentos.md
 ejemplos/generar_pruebas.py
 
+# --- Paquetes generados (python mcpb/empaquetar.py) -----------------------
+dist/
+
 # --- Entorno y herramientas ------------------------------------------------
 .venv/
 venv/

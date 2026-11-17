@@ -80,12 +80,28 @@ def preguntar_confianza(carpeta: str) -> bool:
     forzado = os.environ.get("ANONIMIZADOR_CONFIANZA")  # solo para las pruebas
     if forzado:
         return forzado == "si"
+    return preguntar("Claude quiere leer documentos de esta carpeta:\n\n"
+                     f"{carpeta}\n\n"
+                     "¿Confías en ella? Si aceptas, el anonimizador podrá leer sus "
+                     "ficheros y subcarpetas (Claude recibirá solo las copias "
+                     "anonimizadas) y guardar resultados en ella, ahora y en adelante.")
+
+
+def preguntar_instalacion() -> bool:
+    """Pregunta al usuario si se descarga el motor (solo la primera vez)."""
+    forzado = os.environ.get("ANONIMIZADOR_INSTALAR")  # solo para las pruebas
+    if forzado:
+        return forzado == "si"
+    return preguntar("Para leer documentos, el anonimizador necesita instalar su "
+                     "motor de detección y de OCR (Presidio, spaCy y RapidOCR).\n\n"
+                     "Se descargan alrededor de 1 GB una sola vez, en "
+                     f"{config.home()}. Después todo funciona sin conexión.\n\n"
+                     "Hace falta Python 3.10 a 3.13. ¿Instalar ahora?")
+
+
+def preguntar(texto: str) -> bool:
+    """Ventana SI/NO del sistema, con NO por defecto y dos minutos de espera."""
     titulo = "Anonimizador local"
-    texto = ("Claude quiere leer documentos de esta carpeta:\n\n"
-             f"{carpeta}\n\n"
-             "¿Confías en ella? Si aceptas, el anonimizador podrá leer sus "
-             "ficheros y subcarpetas (Claude recibirá solo las copias "
-             "anonimizadas) y guardar resultados en ella, ahora y en adelante.")
     try:
         if os.name == "nt":
             import ctypes
@@ -117,6 +133,36 @@ def preguntar_confianza(carpeta: str) -> bool:
     return False
 
 
+MODULOS_MOTOR = ("presidio_analyzer", "spacy", "markitdown", "rapidocr")
+
+
+def motor_disponible() -> bool:
+    """Si este interprete tiene las dependencias pesadas (sin importarlas)."""
+    import importlib.util
+    return all(importlib.util.find_spec(m) is not None for m in MODULOS_MOTOR)
+
+
+def relanzar_en_entorno(argv: list[str]) -> int | None:
+    """Como extension de Claude Desktop el servidor arranca con el Python del
+    sistema, que no tiene el motor. Si el entorno de instalar.py existe, el
+    servidor se ejecuta con el y este proceso solo espera (la entrada y la
+    salida estandar se heredan tal cual). None si no hay que relanzar."""
+    if os.environ.get("ANONIMIZADOR_RELANZADO") or motor_disponible():
+        return None
+    interprete = config.python_del_entorno()
+    if interprete is None:
+        return None
+    import subprocess
+    entorno = dict(os.environ, ANONIMIZADOR_RELANZADO="1")
+    try:
+        return subprocess.run([str(interprete), str(Path(__file__).resolve()), *argv],
+                              env=entorno).returncode
+    except OSError as exc:
+        print(f"anonimizador/mcp: no se pudo usar el entorno: {exc!r}",
+              file=sys.stderr, flush=True)
+        return None
+
+
 def demasiado_amplia(carpeta: str) -> bool:
     """Raices de disco, la carpeta personal (o una superior) y las del sistema:
     confiar en ellas equivaldria a no tener limite."""
@@ -137,6 +183,75 @@ class Servidor:
         self.proyecto = self.fijas[0] if self.fijas else str(config.home() / "escritorio")
         self.actual = self.fijas[0] if self.fijas else None  # base de las rutas relativas
         self.tuberia = None
+        self.instalacion = None  # proceso de instalar.py lanzado por este servidor
+
+    # -- motor -------------------------------------------------------------- #
+
+    @property
+    def _registro_instalacion(self) -> Path:
+        return config.home() / "instalacion.log"
+
+    def estado_instalacion(self) -> str:
+        """'listo', 'falta', 'instalando', 'reiniciar' o 'fallo'."""
+        if self.tuberia is not None or motor_disponible():
+            return "listo"
+        if self.instalacion is not None:
+            codigo = self.instalacion.poll()
+            if codigo is None:
+                return "instalando"
+            return "reiniciar" if codigo == 0 else "fallo"
+        return "falta"
+
+    def _final_registro(self, lineas: int = 6) -> str:
+        try:
+            texto = self._registro_instalacion.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        return "\n".join(texto.strip().splitlines()[-lineas:])
+
+    def motor(self):
+        """El modulo tuberia, o Rechazo explicando en que punto esta la
+        instalacion del motor (y ofreciendola al usuario si falta)."""
+        if self.tuberia is not None:
+            return self.tuberia
+        situacion = self.estado_instalacion()
+        if situacion == "listo":
+            from anonimizador import tuberia
+            self.tuberia = tuberia
+            return tuberia
+        if situacion == "instalando":
+            raise Rechazo("El motor de anonimizacion se esta instalando (tarda de 5 a 15 "
+                          "minutos). Dile al usuario que espere y vuelve a intentarlo "
+                          "despues. Ultimas lineas:\n" + self._final_registro(3))
+        if situacion == "reiniciar":
+            raise Rechazo("La instalacion del motor ha terminado. Para usarlo, el "
+                          "usuario debe reiniciar Claude Desktop (o desactivar y volver "
+                          "a activar la extension). Despues vuelve a intentarlo.")
+        if situacion == "fallo":
+            self.instalacion = None
+            raise Rechazo("La instalacion del motor ha fallado. Muestra al usuario estas "
+                          f"lineas del registro ({self._registro_instalacion}):\n"
+                          + self._final_registro()
+                          + "\nLo mas habitual es que falte un Python 3.10 a 3.13. Si "
+                          "vuelves a intentar la lectura, se le ofrecera instalar de nuevo.")
+        # Falta el motor: se ofrece al usuario en una ventana suya.
+        if not preguntar_instalacion():
+            raise Rechazo("El motor de anonimizacion no esta instalado y el usuario no ha "
+                          "aceptado instalarlo ahora. Sin el no se puede leer ningun "
+                          "documento. No insistas.")
+        import subprocess
+        config.home().mkdir(parents=True, exist_ok=True)
+        registro = open(self._registro_instalacion, "w", encoding="utf-8")  # noqa: SIM115
+        opciones = {"creationflags": 0x08000000} if os.name == "nt" else {}  # sin ventana
+        self.instalacion = subprocess.Popen(
+            [sys.executable, "-u", str(RAIZ / "instalar.py")], cwd=str(config.home()),
+            stdin=subprocess.DEVNULL, stdout=registro, stderr=subprocess.STDOUT,
+            env=dict(os.environ, PYTHONIOENCODING="utf-8"), **opciones)
+        registro.close()
+        raise Rechazo("El usuario ha aceptado instalar el motor de anonimizacion y la "
+                      "instalacion ha empezado (descarga ~1 GB, tarda de 5 a 15 minutos). "
+                      "Cuando termine habra que reiniciar Claude Desktop. Usa la "
+                      "herramienta `estado` para ver como va.")
 
     # -- carpetas de confianza ---------------------------------------------- #
 
@@ -246,17 +361,10 @@ class Servidor:
         if sufijo not in admitidas:
             raise Rechazo(f"Formato no soportado ({sufijo or 'sin extension'}). Se pueden "
                           f"leer: {' '.join(sorted(admitidas))}")
-        if self.tuberia is None:
-            try:
-                from anonimizador import tuberia
-            except ImportError as exc:
-                raise Rechazo("El motor de anonimizacion no esta instalado. Pide al "
-                              "usuario que ejecute `python instalar.py` en la carpeta "
-                              f"del anonimizador. ({exc})") from None
-            self.tuberia = tuberia
+        tuberia = self.motor()
         from anonimizador import conversion
         try:
-            resultado = self.tuberia.procesar(self.proyecto, fichero, cfg)
+            resultado = tuberia.procesar(self.proyecto, fichero, cfg)
         except conversion.SinTexto:
             raise Rechazo("El fichero no tiene texto reconocible (una foto, un logotipo "
                           "o un escaneado ilegible). Este servidor no entrega imagenes, "
@@ -353,9 +461,13 @@ class Servidor:
                       "ventana aparte la primera vez; usa rutas completas.")
         if self.actual:
             lineas.append(f"Las rutas relativas parten de: {self.ocultar(self.actual)}")
-        interprete = config.python_del_entorno()
-        lineas.append("Motor instalado: " + ("si" if interprete else
-                                             "NO (falta ejecutar instalar.py)"))
+        lineas.append("Motor: " + {
+            "listo": "instalado",
+            "falta": "NO instalado (se ofrecera instalarlo en la primera lectura)",
+            "instalando": "instalandose ahora. Ultimas lineas:\n" + self._final_registro(3),
+            "reiniciar": "instalado; falta reiniciar Claude Desktop para usarlo",
+            "fallo": "la instalacion ha fallado:\n" + self._final_registro(),
+        }[self.estado_instalacion()])
         admitidas = sorted(set(cfg["extensiones_documento"]) | set(cfg["extensiones_texto"])
                            | config.EXT_OCR)
         lineas.append("Formatos: " + " ".join(admitidas))
@@ -527,11 +639,20 @@ def main(argv: list[str] | None = None) -> int:
                     help="Carpeta con acceso desde el principio, sin preguntar "
                          "(opcional, repetible). Para las demas se pide "
                          "confirmacion al usuario la primera vez.")
+    # Tambien sin --carpeta: la extension .mcpb pasa cada carpeta elegida en
+    # la configuracion como un argumento suelto.
+    ap.add_argument("carpetas", nargs="*", help=argparse.SUPPRESS)
+    argv = sys.argv[1:] if argv is None else argv
     args = ap.parse_args(argv)
-    for carpeta in args.carpeta:
+    # Una opcion de la extension sin rellenar puede llegar vacia o sin sustituir.
+    carpetas = [c for c in args.carpeta + args.carpetas if c.strip() and "${" not in c]
+    for carpeta in carpetas:
         if not os.path.isdir(os.path.expanduser(carpeta)):
             ap.error(f"no existe la carpeta: {carpeta}")
-    return servir(Servidor(args.carpeta))
+    codigo = relanzar_en_entorno(argv)
+    if codigo is not None:
+        return codigo
+    return servir(Servidor(carpetas))
 
 
 if __name__ == "__main__":

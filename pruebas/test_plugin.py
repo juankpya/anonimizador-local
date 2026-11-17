@@ -465,6 +465,87 @@ class D_ServidorMCP(Base):
         self.sin_fugas(texto)
 
 
+def _python_sin_motor() -> str | None:
+    """Un interprete sin el motor, como el del sistema que usa la extension."""
+    for candidato in (sys.executable, getattr(sys, "_base_executable", None)):
+        if candidato and subprocess.run(
+                [candidato, "-c", "import importlib.util as u, sys; "
+                 "sys.exit(u.find_spec('presidio_analyzer') is not None)"],
+                capture_output=True).returncode == 0:
+            return candidato
+    return None
+
+
+@unittest.skipUnless(ENTORNO, "falta el entorno: ejecuta python instalar.py")
+class F_ExtensionMCPB(Base):
+    """La extension .mcpb de Claude Desktop: paquete, manifiesto y arranque
+    con un Python sin el motor."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        import zipfile
+        paquete = cls.tmp / "anonimizador.mcpb"
+        subprocess.run([sys.executable, str(RAIZ / "mcpb" / "empaquetar.py"), str(paquete)],
+                       check=True, capture_output=True)
+        cls.ext = cls.tmp / "extension"
+        with zipfile.ZipFile(paquete) as z:
+            z.extractall(cls.ext)
+        cls.manifiesto = json.loads((cls.ext / "manifest.json").read_text(encoding="utf-8"))
+        cls.python = _python_sin_motor()
+
+    def servidor(self, args: list[str], llamadas: list[tuple[str, dict]], **entorno):
+        if self.python is None:
+            self.skipTest("no hay un Python sin el motor para simular la extension")
+        mensajes = [{"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {}}]
+        mensajes += [{"jsonrpc": "2.0", "id": i, "method": "tools/call",
+                      "params": {"name": n, "arguments": a}}
+                     for i, (n, a) in enumerate(llamadas, 1)]
+        p = subprocess.run([self.python, str(self.ext / "servidor_mcp.py"), *args],
+                           input="\n".join(json.dumps(m) for m in mensajes) + "\n",
+                           capture_output=True, text=True, encoding="utf-8", timeout=300,
+                           env=dict(self.env, **entorno))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        respuestas = [json.loads(l) for l in p.stdout.splitlines()]
+        return [(r["result"]["content"][0]["text"], r["result"]["isError"])
+                for r in respuestas[1:]]
+
+    def test_1_manifiesto(self):
+        from anonimizador import __version__
+        m = self.manifiesto
+        for campo in ("manifest_version", "name", "version", "description", "author", "server"):
+            self.assertIn(campo, m)
+        self.assertEqual(m["version"], __version__)
+        self.assertTrue((self.ext / m["server"]["entry_point"]).is_file())
+        self.assertTrue((self.ext / m["icon"]).is_file())
+        self.assertEqual(sorted(t["name"] for t in m["tools"]),
+                         ["estado", "guardar_revelado", "leer_documento",
+                          "listar_carpeta", "revelar_fichero"])
+        # Ningun dato ni fichero de desarrollo dentro del paquete.
+        nombres = {p.name for p in self.ext.rglob("*")}
+        for prohibido in ("mapa.json", "confianza.json", ".venv", "originales", "pruebas"):
+            self.assertNotIn(prohibido, nombres)
+
+    def test_2_usa_el_motor_instalado(self):
+        # Carpeta como argumento suelto, y opciones vacias o sin sustituir.
+        (texto, error), = self.servidor(
+            ["", "${user_config.carpetas}", str(self.proyecto)],
+            [("leer_documento", {"ruta": "contrato.docx"})])
+        self.assertFalse(error, texto)
+        self.assertIn("PERSONA_", texto)
+        for real in REALES:
+            self.assertNotIn(real, texto)
+
+    def test_3_sin_motor_ofrece_instalar(self):
+        resultados = self.servidor(
+            [str(self.proyecto)], [("estado", {}), ("leer_documento", {"ruta": "contrato.docx"})],
+            ANONIMIZADOR_PYTHON=str(self.tmp / "no_existe"), ANONIMIZADOR_INSTALAR="no")
+        (estado, _), (texto, error) = resultados
+        self.assertIn("NO instalado", estado)
+        self.assertTrue(error)
+        self.assertIn("no ha aceptado instalarlo", texto)
+
+
 @unittest.skipUnless(ENTORNO, "falta el entorno: ejecuta python instalar.py")
 class E_ServidorSinCarpeta(D_ServidorMCP):
     """Servidor sin --carpeta: el usuario acepta la ventana de confianza."""

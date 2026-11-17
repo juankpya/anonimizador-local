@@ -33,7 +33,7 @@ Funciona en los dos, pero de forma distinta:
 
 | | Claude Code | Claude Desktop |
 |---|---|---|
-| Cómo se instala | Como plugin, con tres órdenes | Como servidor MCP, editando un fichero de configuración |
+| Cómo se instala | Como plugin, con tres órdenes | Como extensión: doble clic en un fichero `.mcpb` |
 | Qué ves en las respuestas | **Los datos reales** | Los identificadores (`PERSONA_1`) |
 | Si adjuntas o pegas un documento | Te avisa y detiene el mensaje | No se entera |
 | Resultado con datos reales | `/anonimizador:revelar fichero` | Pides a Claude que lo guarde y abres el `.revelado.md` |
@@ -75,6 +75,26 @@ anonimizador-local` y vuelve a abrir Claude Code.
 
 ## Instalación en Claude Desktop
 
+1. Descarga el fichero `anonimizador-local-<versión>.mcpb` de la página de
+   [versiones publicadas](https://github.com/juankpya/anonimizador-local/releases).
+2. Haz doble clic en él (o arrástralo a Claude Desktop, en **Ajustes →
+   Extensiones**) y pulsa **Instalar**.
+3. Si quieres, elige en la configuración de la extensión las carpetas a las
+   que podrá acceder sin preguntarte. Puedes dejarlo vacío.
+4. Pide a Claude que lea un documento. **La primera vez** aparece una ventana
+   preguntando si instalar el motor de detección: pulsa **Sí**. Descarga
+   alrededor de 1 GB y tarda de 5 a 15 minutos; puedes preguntar a Claude
+   «¿cómo va la instalación del anonimizador?».
+5. Cuando Claude te diga que ha terminado, **reinicia Claude Desktop**. Ya
+   está listo.
+
+**Para actualizar**: descarga e instala el `.mcpb` de la versión nueva. El
+motor no se vuelve a descargar.
+
+### Instalación manual (alternativa)
+
+Solo si no puedes usar la extensión.
+
 1. Descarga el proyecto en una carpeta que no vayas a mover. Con git:
 
    ```bash
@@ -95,17 +115,18 @@ anonimizador-local` y vuelve a abrir Claude Code.
    ```
 
    Imprime un bloque de texto que empieza por `"mcpServers"`.
-4. En Claude Desktop ve a **Ajustes → Desarrollador → Editar configuración**.
-   Se abre la carpeta de `claude_desktop_config.json`. Ábrelo con el Bloc de
-   notas y copia dentro el bloque. Si el fichero ya tiene contenido, el bloque
-   va dentro de las llaves principales, separado por una coma.
-5. **Cierra Claude Desktop del todo** (también desde la bandeja del sistema),
-   guarda el fichero y vuelve a abrir la app.
-6. Comprueba que en el chat aparecen las herramientas del anonimizador
-   (icono de herramientas, «anonimizador»).
+4. **Cierra Claude Desktop del todo** (también desde la bandeja del sistema).
+   Abre `claude_desktop_config.json` (la carpeta se abre desde **Ajustes →
+   Desarrollador → Editar configuración**) con el Bloc de notas y copia dentro
+   el bloque. Si el fichero ya tiene contenido, el bloque va dentro de las
+   llaves principales, separado por una coma.
+5. Guarda el fichero y vuelve a abrir la app.
 
 **Para actualizar**: `git pull` en la carpeta (o descarga de nuevo el ZIP en
 el mismo sitio) y reinicia Claude Desktop.
+
+No uses a la vez la extensión y la instalación manual: tendrías las
+herramientas duplicadas.
 
 ## Uso diario
 
@@ -219,7 +240,9 @@ Ten en cuenta también:
 | `/anonimizador:instalar` dice que no encuentra Python | Instala Python 3.10–3.13 y marca «Add to PATH»; vuelve a abrir Claude Code |
 | Claude dice que no puede leer el documento | Es intencionado si el anonimizado falla: el original nunca se envía. Ejecuta `/anonimizador:estado` y revisa la instalación |
 | En Claude Code aparece una orden `anonimizar.py --preparar` | Es el paso normal para Word y Excel: prepara la copia anonimizada antes de que Claude la lea |
-| En Claude Desktop no aparece el anonimizador | Comprueba que el bloque sigue en `claude_desktop_config.json`: la app puede reescribirlo si se editó con ella abierta. Ciérrala del todo, edítalo y vuelve a abrirla |
+| La extensión no arranca o dice que falta Python | Instala Python 3.10–3.13 marcando «Add to PATH» y reinicia Claude Desktop |
+| La instalación del motor falló | Claude te mostrará las últimas líneas del registro (`~/.anonimizador/instalacion.log`). Lo habitual es que falte un Python 3.10–3.13; corrígelo y pide de nuevo la lectura |
+| En Claude Desktop no aparece el anonimizador (instalación manual) | Comprueba que el bloque sigue en `claude_desktop_config.json`: la app puede reescribirlo si se editó con ella abierta. Ciérrala del todo, edítalo y vuelve a abrirla |
 | No salió la ventana de confianza | Puede estar detrás de otras ventanas; pasados dos minutos se toma como «No». Pide a Claude que lo intente de nuevo |
 | Quiero retirar la confianza a una carpeta | Borra su línea en `~/.anonimizador/confianza.json` |
 | Quiero borrar todos los datos guardados | Borra la carpeta `~/.anonimizador/proyectos` (perderás la posibilidad de revelar los textos ya generados) |
