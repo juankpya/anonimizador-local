@@ -11,6 +11,9 @@ recibe esa copia. Cuando responde, el plugin **vuelve a poner los datos reales
 en tu pantalla**, de modo que tú lees «María Fernández» y Claude solo ha visto
 `PERSONA_1`.
 
+> **¿Solo quieres usarlo?** Empieza por la [guía de uso](GUIA.md): instalación
+> paso a paso, uso diario y problemas frecuentes.
+
 > **Estado: versión 0.5, alfa.** La detección es probabilística: reduce mucho
 > la exposición de datos personales, pero **no garantiza** que no se escape
 > ninguno. Lee el apartado [Límites](#límites) antes de usarlo con datos reales.
