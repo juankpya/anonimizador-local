@@ -147,9 +147,10 @@ MCP con herramientas que Claude usa para leer los documentos ya anonimizados.
 1. Descarga `anonimizador-local-<versión>.mcpb` de la página de
    [versiones publicadas](https://github.com/juankpya/anonimizador-local/releases)
    o genéralo tú con `python mcpb/empaquetar.py` (queda en `dist/`).
-2. Ábrelo con doble clic, o arrástralo a Claude Desktop (Ajustes →
-   Extensiones), y pulsa **Instalar**. Opcionalmente, elige carpetas con
-   acceso directo.
+2. En Claude Desktop, abre **Ajustes → Extensiones**, arrastra el fichero a
+   esa ventana y pulsa **Instalar**. Opcionalmente, elige carpetas con acceso
+   directo. (El doble clic solo funciona si tu instalación asocia los `.mcpb`
+   a Claude; la versión de Microsoft Store no lo hace.)
 3. La primera vez que Claude lea un documento, una ventana te pregunta si
    instalar el motor (~1 GB, una sola vez). Al terminar, reinicia Claude
    Desktop. Si ya lo tenías instalado por el plugin o con `instalar.py`, se

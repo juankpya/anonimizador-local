@@ -33,7 +33,7 @@ Funciona en los dos, pero de forma distinta:
 
 | | Claude Code | Claude Desktop |
 |---|---|---|
-| Cómo se instala | Como plugin, con tres órdenes | Como extensión: doble clic en un fichero `.mcpb` |
+| Cómo se instala | Como plugin, con tres órdenes | Como extensión: arrastras un fichero `.mcpb` a Ajustes → Extensiones |
 | Qué ves en las respuestas | **Los datos reales** | Los identificadores (`PERSONA_1`) |
 | Si adjuntas o pegas un documento | Te avisa y detiene el mensaje | No se entera |
 | Resultado con datos reales | `/anonimizador:revelar fichero` | Pides a Claude que lo guarde y abres el `.revelado.md` |
@@ -77,8 +77,9 @@ anonimizador-local` y vuelve a abrir Claude Code.
 
 1. Descarga el fichero `anonimizador-local-<versión>.mcpb` de la página de
    [versiones publicadas](https://github.com/juankpya/anonimizador-local/releases).
-2. Haz doble clic en él (o arrástralo a Claude Desktop, en **Ajustes →
-   Extensiones**) y pulsa **Instalar**.
+2. En Claude Desktop, abre **Ajustes → Extensiones**, arrastra el fichero a
+   esa ventana y pulsa **Instalar**. El doble clic sobre el fichero solo
+   funciona en algunas instalaciones (en la de Microsoft Store, no).
 3. Si quieres, elige en la configuración de la extensión las carpetas a las
    que podrá acceder sin preguntarte. Puedes dejarlo vacío.
 4. Pide a Claude que lea un documento. **La primera vez** aparece una ventana
