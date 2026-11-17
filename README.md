@@ -299,6 +299,28 @@ python pruebas/test_plugin.py
 Ejecuta cada hook como lo hace Claude Code, con los documentos de `ejemplos/`
 (datos ficticios) y una carpeta temporal en lugar de `~/.anonimizador`.
 
+### Batería de fugas
+
+Mide cuántos datos se escapan con documentos más difíciles: unos 25 ficheros
+generados con datos ficticios (correos, CSV, Word con control de cambios, Excel
+con hojas ocultas, PDF escaneados, fotos de móvil torcidas, imágenes borrosas,
+letra manuscrita, capturas de correo, hoja de cálculo y chat) y, opcionalmente,
+documentos de identidad *specimen* de Wikimedia Commons.
+
+```
+python pruebas/bateria/generar.py     # crea pruebas/bateria/casos/
+python pruebas/bateria/descargar.py   # opcional: specimen reales (Argentina, Ecuador, Italia)
+python pruebas/bateria/lanzar.py      # informe en pruebas/bateria/resultados/<fecha>/
+python pruebas/bateria/lanzar.py foto # solo los casos cuyo nombre contiene «foto»
+```
+
+Para cada dato indica si se sustituyó, si se escapó entero (**FUGA**), en
+parte (**FUGA PARCIAL**) o con una errata del OCR que lo hace irreconocible
+para el detector pero no para quien lo lea (**ERRATA**). También cuenta las
+palabras normales que desaparecen por exceso de celo. Los ficheros de
+`casos/` sirven además para probar el plugin a mano en Claude Code o Claude
+Desktop.
+
 ## Hoja de ruta
 
 - Empaquetar el servidor MCP como extensión de Claude Desktop (`.mcpb`), para

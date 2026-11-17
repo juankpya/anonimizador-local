@@ -8,6 +8,11 @@ confidencial/
 *.revelado.*
 .anonimizador.json
 
+# --- Bateria de pruebas: se regenera, y los externos tienen su licencia ----
+pruebas/bateria/casos/
+pruebas/bateria/externos/
+pruebas/bateria/resultados/
+
 # --- Material interno previo a la version publica -------------------------
 legado/
 Informe_anonimizacion_local.md
